@@ -98,8 +98,6 @@ main{max-width:700px;margin:0 auto;padding:8px 14px 110px}
 <header>
   <div class="brand"><span class="dot"></span>MyDay</div>
   <button class="icobtn" id="btnToggle" onclick="toggleView()" title="切换视图">▦</button>
-  <button class="icobtn needapp" id="btnImport" onclick="importMenu()" title="导入备份">⇩</button>
-  <button class="icobtn needapp" id="btnExport" onclick="exportMenu()" title="导出备份">⇪</button>
   <button class="icobtn needapp" id="btnNew" onclick="openEditor()" title="写日记">＋</button>
   <button class="icobtn" id="btnMenu" onclick="menuMenu()" title="菜单">⋯</button>
 </header>
@@ -466,17 +464,6 @@ function sheetBlank(ev){
   if (ev.target === el('sheet')) closeSheet();
 }
 
-function exportMenu(){
-  showSheet([
-    { label: '备份（.zip）', sub: '完整无损备份，解压后浏览器打开 index.html 即可浏览', fn: function(){ if (IS_APP) window.Android.exportZip(); } },
-    { label: '网页文件夹', sub: '把可浏览的网站直接导出到所选文件夹', fn: function(){ if (IS_APP) window.Android.exportFolder(); } },
-    { label: '分享备份', sub: '把备份压缩包分享出去', fn: function(){ if (IS_APP) window.Android.shareZip(); } }
-  ]);
-}
-function importMenu(){
-  if (!confirm('导入将合并数据，同日期日记会被覆盖。\n请选择之前导出的 .zip 备份。')) return;
-  window.Android.importData();
-}
 function menuMenu(){
   var stats = { entries: entries.length, images: 0, bytes: 0 };
   if (IS_APP) {
@@ -487,6 +474,9 @@ function menuMenu(){
   showSheet([
     { label: '统计信息', sub: stats.entries + ' 篇日记 · ' + stats.images + ' 张图片 · ' + fmtBytes(stats.bytes), fn: function(){} },
     { label: (theme === 'dark') ? '切换为浅色主题' : '切换为深色主题', fn: toggleTheme },
+    { label: '导出备份（.zip）', sub: '完整无损备份，解压后浏览器打开 index.html 即可浏览', fn: function(){ if (IS_APP) window.Android.exportZip(); } },
+    { label: '导出网页文件夹', sub: '把可浏览的网站直接导出到所选文件夹', fn: function(){ if (IS_APP) window.Android.exportFolder(); } },
+    { label: '导入备份', sub: '从之前导出的 .zip 备份恢复', fn: importMenu },
     { label: '分享备份', sub: '把备份压缩包分享出去', fn: function(){ if (IS_APP) window.Android.shareZip(); } },
     { label: '清空所有日记', sub: '删除全部内容，不可恢复', danger: true, fn: function(){
         if (IS_APP && confirm('确定清空所有数据？此操作不可恢复！')) { try { window.Android.clearAll(); } catch(e) {} toast('已清空'); reload(); }

@@ -293,9 +293,12 @@ class MainActivity : ComponentActivity() {
     private fun exportContent(action: (path: String, open: () -> InputStream) -> Unit) {
         val entries = loadEntriesJsonArray()
         val template = assets.open("index.html").bufferedReader().use { it.readText() }
-        val idx = template.indexOf("/*DATA*/")
-        val html = if (idx >= 0) {
-            template.substring(0, idx) + entries + template.substring(idx + "/*DATA*/".length)
+        val assign = "window.__MYDAY_EXPORT_DATA__="
+        val start = template.indexOf(assign)
+        val idx = if (start >= 0) template.indexOf("/*DATA*/", start) else -1
+        val html = if (start >= 0 && idx > start) {
+            val safe = entries.replace("</", "<\\/")
+            template.substring(0, start + assign.length) + safe + template.substring(idx + "/*DATA*/".length)
         } else {
             template
         }
