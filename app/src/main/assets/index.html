@@ -152,6 +152,7 @@ main{max-width:700px;margin:0 auto;padding:8px 14px 110px}
     <div class="edbar">
       <button class="icobtn" onclick="closeEditor()" title="返回">✕</button>
       <input type="date" id="edDate">
+      <input type="time" id="edTime">
       <button class="savebtn" onclick="saveEntry()">保存</button>
     </div>
     <textarea id="edText" placeholder="记录今天的日常、心情、孩子们的趣事……"></textarea>
@@ -188,6 +189,8 @@ var pendingImages = [];
 var editorDirty = false;
 var dateAutoSet = false;
 var autoDateDone = false;
+var timeManual = false;
+var autoTimeDone = false;
 var lbLast = 0;
 
 function pad(n){ return n < 10 ? '0' + n : '' + n; }
@@ -530,9 +533,11 @@ function openEditorById(id){
   editingId = en.id;
   editingTime = en.time || '';
   dateAutoSet = true;
+  timeManual = true;
   editingImages = (en.images || []).slice();
   pendingImages = [];
   el('edDate').value = en.date;
+  el('edTime').value = en.time || '';
   el('edText').value = en.text;
   editorDirty = false;
   renderEditorImages();
@@ -545,9 +550,12 @@ function openNewEntry(date){
   editingTime = '';
   dateAutoSet = false;
   autoDateDone = false;
+  timeManual = false;
+  autoTimeDone = false;
   editingImages = [];
   pendingImages = [];
   el('edDate').value = date || todayStr();
+  el('edTime').value = '';
   el('edText').value = '';
   editorDirty = false;
   renderEditorImages();
@@ -572,6 +580,11 @@ function __openFromShare(jsonStr){
 function applyEditorDate(d){
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
   el('edDate').value = d;
+  editorDirty = true;
+}
+function applyEditorTime(t){
+  if (!/^\d{2}:\d{2}$/.test(t)) return;
+  el('edTime').value = t;
   editorDirty = true;
 }
 function closeEditor(){
@@ -621,6 +634,10 @@ function onPickFiles(files){
         if (res.date) {
           applyEditorDate(res.date);
           autoDateDone = true;
+          if (res.time && !timeManual && !autoTimeDone) {
+            applyEditorTime(res.time);
+            autoTimeDone = true;
+          }
         } else if (!warned) {
           warned = true;
           toast('图片没有日期信息，日期保持原样');
@@ -654,7 +671,34 @@ function dateFromFilename(name){
   if (y >= 2000 && y <= 2100 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return y + '-' + padYear(mo) + '-' + padYear(d);
   return null;
 }
+function normExifTime(s){
+  var m = /^\d{4}[:.-]\d{1,2}[:.-]\d{1,2}T?\s*(\d{1,2}):(\d{2})/.exec(s || '');
+  if (!m) return null;
+  var h = parseInt(m[1], 10), mi = parseInt(m[2], 10);
+  if (h >= 0 && h <= 23 && mi >= 0 && mi <= 59) return padYear(h) + ':' + padYear(mi);
+  return null;
+}
+function timeFromFilename(name){
+  if (!name) return null;
+  var base = String(name).replace(/.*[\\/]/, '').replace(/\.\w{1,5}$/, '');
+  var md = /(20\d{2})[-_.]?(\d{2})[-_.]?(\d{2})/.exec(base);
+  if (!md) return null;
+  var tail = base.slice(md.index + md[0].length);
+  var mt = /[-_. ]?(\d{2})[:.-]?(\d{2})/.exec(tail);
+  if (!mt) return null;
+  var h = parseInt(mt[1], 10), mi = parseInt(mt[2], 10);
+  if (h >= 0 && h <= 23 && mi >= 0 && mi <= 59) return padYear(h) + ':' + padYear(mi);
+  return null;
+}
 function parseExifDate(bytes){
+  var r = scanExif(bytes);
+  return r ? r.date : null;
+}
+function parseExifTime(bytes){
+  var r = scanExif(bytes);
+  return r ? r.time : null;
+}
+function scanExif(bytes){
   var len = bytes.length;
   if (len < 20) return null;
   var i = 2, guard = 0;
@@ -699,6 +743,14 @@ function parseTiffExif(bytes, start, end){
     for (var k = 0; k < count; k++) s += String.fromCharCode(bytes[base + k]);
     return s;
   }
+  var out = { date: null, time: null };
+  function pick(dt){
+    if (!dt) return;
+    var nd = normExifDate(dt);
+    var nt = normExifTime(dt);
+    if (nd) out.date = nd;
+    if (nt) out.time = nt;
+  }
   var ifd0 = start + u32(start + 4);
   if (ifd0 < start || ifd0 + 2 > end) return null;
   var n = u16(ifd0);
@@ -707,10 +759,7 @@ function parseTiffExif(bytes, start, end){
     var entry = ifd0 + 2 + e * 12;
     if (entry + 12 > end) break;
     var tag = u16(entry), type = u16(entry + 2), count = u32(entry + 4);
-    if (tag === 0x0132 && type === 2) {
-      var dt = normExifDate(readAscii(entry, count));
-      if (dt) return dt;
-    }
+    if (tag === 0x0132 && type === 2) pick(readAscii(entry, count));
     if (tag === 0x8769 && type === 4 && count === 1) exifPtr = u32(entry + 8);
   }
   if (exifPtr >= 0) {
@@ -721,14 +770,12 @@ function parseTiffExif(bytes, start, end){
         var en = exifIfd + 2 + k * 12;
         if (en + 12 > end) break;
         var tg = u16(en), ty = u16(en + 2), ct = u32(en + 4);
-        if (tg === 0x9003 && ty === 2) {
-          var v = normExifDate(readAscii(en, ct));
-          if (v) return v;
-        }
+        if (tg === 0x9003 && ty === 2) pick(readAscii(en, ct));
       }
     }
   }
-  return null;
+  if (!out.date && !out.time) return null;
+  return out;
 }
 function parseExifDateFromDataUrl(dataUrl){
   var m = /^data:image\/(?:jpeg|jpg);base64,/.exec(dataUrl);
@@ -740,12 +787,23 @@ function parseExifDateFromDataUrl(dataUrl){
     return parseExifDate(bytes);
   } catch (e) { return null; }
 }
+function parseExifTimeFromDataUrl(dataUrl){
+  var m = /^data:image\/(?:jpeg|jpg);base64,/.exec(dataUrl);
+  if (!m) return null;
+  try {
+    var bin = atob(dataUrl.split(',')[1]);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return parseExifTime(bytes);
+  } catch (e) { return null; }
+}
 function compressImage(file){
   return new Promise(function(resolve, reject){
     var reader = new FileReader();
     reader.onerror = function(){ reject(new Error('read')); };
     reader.onload = function(){
       var exifDate = parseExifDateFromDataUrl(reader.result) || dateFromFilename(file.name);
+      var exifTime = parseExifTimeFromDataUrl(reader.result) || timeFromFilename(file.name);
       var img = new Image();
       img.onerror = function(){ reject(new Error('decode')); };
       img.onload = function(){
@@ -763,7 +821,7 @@ function compressImage(file){
           ctx.drawImage(img, 0, 0, nw, nh);
           var dataUrl = c.toDataURL('image/jpeg', 0.82);
           c.width = 0; c.height = 0;
-          resolve({ dataUrl: dataUrl, date: exifDate });
+          resolve({ dataUrl: dataUrl, date: exifDate, time: exifTime });
         } catch (e) { reject(e); }
       };
       img.src = reader.result;
@@ -789,7 +847,7 @@ function saveEntry(){
   if (!id) {
     id = 'e' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
   }
-  var time = editingTime || nowHM();
+  var time = el('edTime').value || editingTime || nowHM();
   var originalImages = editingImages.slice();
   var names = editingImages.slice();
   var idx = nextNum(id, names) + 1;
@@ -1000,6 +1058,10 @@ el('edText').addEventListener('input', function(){ editorDirty = true; });
 el('edDate').addEventListener('change', function(){
   dateAutoSet = true;
   applyEditorDate(el('edDate').value);
+});
+el('edTime').addEventListener('change', function(){
+  timeManual = true;
+  applyEditorTime(el('edTime').value);
 });
 el('sheet').addEventListener('click', sheetBlank);
 
