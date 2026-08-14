@@ -33,6 +33,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.zip.ZipEntry
@@ -200,11 +201,11 @@ class MainActivity : ComponentActivity() {
         }
 
         @JavascriptInterface
-        fun saveEntry(date: String, json: String): Boolean {
-            if (!date.matches(Regex("""\d{4}-\d{2}-\d{2}"""))) return false
+        fun saveEntry(id: String, json: String): Boolean {
+            if (!id.matches(Regex("""e[a-z0-9_]{4,}"""))) return false
             return try {
                 JSONObject(json)
-                File(entriesDir, "$date.json").writeText(json)
+                File(entriesDir, "$id.json").writeText(json)
                 true
             } catch (e: Exception) {
                 false
@@ -212,12 +213,9 @@ class MainActivity : ComponentActivity() {
         }
 
         @JavascriptInterface
-        fun deleteEntry(date: String): Boolean {
-            if (!date.matches(Regex("""\d{4}-\d{2}-\d{2}"""))) return false
-            val f = File(entriesDir, "$date.json")
-            val deleted = f.delete()
-            imagesDir.listFiles()?.filter { it.name.startsWith("${date}_") }?.forEach { it.delete() }
-            return deleted
+        fun deleteEntry(id: String): Boolean {
+            if (!id.matches(Regex("""e[a-z0-9_]{4,}"""))) return false
+            return File(entriesDir, "$id.json").delete()
         }
 
         @JavascriptInterface
@@ -282,13 +280,41 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun loadEntriesJsonArray(): String {
-        val files = entriesDir.listFiles()?.filter { it.name.endsWith(".json") }?.sortedBy { it.name } ?: return "[]"
+        val files = entriesDir.listFiles()?.filter { it.isFile }?.sortedBy { it.name } ?: return "[]"
         val sb = StringBuilder("[").apply { ensureCapacity(files.size * 512) }
-        files.forEachIndexed { i, f ->
-            if (i > 0) sb.append(",")
-            sb.append(f.readText())
+        var first = true
+        files.forEach { f ->
+            if (!first) sb.append(",")
+            first = false
+            val name = f.name
+            if (name.matches(Regex("""\d{4}-\d{2}-\d{2}\.json"""))) {
+                sb.append(migrateOldEntry(f).toString())
+            } else {
+                sb.append(f.readText())
+            }
         }
         return sb.append("]").toString()
+    }
+
+    private fun migrateOldEntry(f: File): JSONObject {
+        val jo = try { JSONObject(f.readText()) } catch (e: Exception) { JSONObject() }
+        val date = f.name.removeSuffix(".json")
+        val parts = date.split("-")
+        val cal = Calendar.getInstance()
+        cal.clear()
+        cal.set(parts[0].toInt(), parts[1].toInt() - 1, parts[2].toInt(), 0, 0, 0)
+        val created = cal.getTimeInMillis()
+        val id = "e" + created + "_" + ((Math.random() * 8999).toInt() + 1000)
+        jo.put("id", id)
+        if (!jo.has("created")) jo.put("created", created)
+        if (!jo.has("time")) jo.put("time", "")
+        return try {
+            File(entriesDir, "$id.json").writeText(jo.toString())
+            f.delete()
+            jo
+        } catch (e: Exception) {
+            jo
+        }
     }
 
     private fun exportContent(action: (path: String, open: () -> InputStream) -> Unit) {
@@ -367,8 +393,8 @@ class MainActivity : ComponentActivity() {
                     if (!e.isDirectory) {
                         if (name.endsWith(".json") && name.contains("entries/")) {
                             val leaf = name.substringAfterLast('/')
-                            val date = leaf.removeSuffix(".json")
-                            if (date.matches(Regex("""\d{4}-\d{2}-\d{2}"""))) {
+                            val id = leaf.removeSuffix(".json")
+                            if (id.matches(Regex("""e[a-z0-9_]{4,}""")) || id.matches(Regex("""\d{4}-\d{2}-\d{2}"""))) {
                                 val json = zis.readBytes().toString(Charsets.UTF_8)
                                 File(entriesDir, leaf).writeText(json)
                                 imported++
