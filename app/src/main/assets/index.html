@@ -212,6 +212,8 @@ function el(id){ return document.getElementById(id); }
 var entries = [];
 var view = 'timeline';
 var monthFilter = '';
+var originView = null;
+var originScroll = 0;
 var expanded = new Set();
 var theme = 'light';
 var editingId = null;
@@ -340,20 +342,32 @@ function renderTimeline(){
   if (monthFilter) filtered = entries.filter(function(e){ return e.date.indexOf(monthFilter) === 0; });
   if (!filtered.length && !entries.length) { main.innerHTML = emptyHtml(); return; }
   var html = '';
-  if (monthFilter) {
-    html += '<div class="filterbar"><span>' + monthLabel(monthFilter) + ' 流水</span>' +
-      '<button class="filterx" onclick="clearMonthFilter()" title="清除筛选">✕</button></div>';
+  if (monthFilter || originView) {
+    html += '<div class="filterbar"><span>' + (monthFilter ? monthLabel(monthFilter) + ' 流水' : '流水视图') + '</span>' +
+      '<button class="filterx" onclick="returnToOrigin()" title="返回原视图">✕ 返回</button></div>';
   }
   if (filtered.length) html += streamHtml(groupEntries(filtered));
   main.innerHTML = html;
 }
+function curScroll(){
+  try { return (typeof window.scrollY === 'number') ? window.scrollY : 0; } catch(e) { return 0; }
+}
 function setMonthFilter(key){
   monthFilter = key;
+  originView = view;
+  originScroll = curScroll();
   setView('timeline');
 }
-function clearMonthFilter(){
+function returnToOrigin(){
+  var target = originView || 'timeline';
+  var backScroll = originScroll || 0;
   monthFilter = '';
-  render();
+  originView = null;
+  originScroll = 0;
+  setView(target);
+  if (backScroll) {
+    try { setTimeout(function(){ window.scrollTo(0, backScroll); }, 50); } catch(e) {}
+  }
 }
 
 function dayThumbsHtml(g){
@@ -567,8 +581,11 @@ function setView(v){
   updateViewTabs();
 }
 function goDefaultView(){
-  if (view !== 'timeline') setView('timeline');
-  updateViewTabs();
+  if (view !== 'timeline') {
+    originView = view;
+    originScroll = curScroll();
+  }
+  setView('timeline');
 }
 function updateViewTabs(){
   var tabs = document.querySelectorAll('.viewtab');
@@ -1187,6 +1204,7 @@ window.__handleBack = function(){
   if (el('viewer').classList.contains('open')) { closeViewer(); return true; }
   if (el('sheet').classList.contains('open')) { closeSheet(); return true; }
   if (el('editor').classList.contains('open')) return closeEditor();
+  if (view === 'timeline' && originView) { returnToOrigin(); return true; }
   return false;
 };
 window.__onExportResult = function(ok){ toast(ok ? '导出完成' : '导出失败'); };
