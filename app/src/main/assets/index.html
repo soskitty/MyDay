@@ -558,6 +558,19 @@ function openNewEntry(date){
 }
 function newEntry(){ openNewEntry(todayStr()); }
 function newEntryForDate(d){ openNewEntry(d); }
+function __openFromShare(jsonStr){
+  if (!IS_APP) return;
+  var data;
+  try { data = JSON.parse(jsonStr); } catch (e) { return; }
+  openNewEntry(data.date);
+  var imgs = data.images || [];
+  imgs.forEach(function(d){
+    pendingImages.push({ dataUrl: d });
+  });
+  editorDirty = true;
+  renderEditorImages();
+  toast('已接收 ' + imgs.length + ' 张图片');
+}
 function applyEditorDate(d){
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
   el('edDate').value = d;

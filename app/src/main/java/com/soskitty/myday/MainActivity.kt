@@ -2,6 +2,11 @@ package com.soskitty.myday
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Bundle
 import android.os.Build
@@ -23,10 +28,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.documentfile.provider.DocumentFile
+import androidx.exifinterface.media.ExifInterface
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -48,6 +56,8 @@ class MainActivity : ComponentActivity() {
 
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private var pendingExportYear: String = "all"
+    private var pageLoaded = false
+    private var pendingSharedUris: List<Uri>? = null
 
     private val fileChooserLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -123,7 +133,128 @@ class MainActivity : ComponentActivity() {
         entriesDir = File(filesDir, "entries").apply { mkdirs() }
         imagesDir = File(filesDir, "images").apply { mkdirs() }
         setupWebView()
+        handleShareIntent(intent)
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleShareIntent(intent)
+    }
+
+    private fun handleShareIntent(intent: Intent?) {
+        val action = intent?.action ?: return
+        if (action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE) return
+        val uris = ArrayList<Uri>()
+        val clip = intent.clipData
+        if (clip != null) {
+            for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { uris.add(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            val single = if (Build.VERSION.SDK_INT >= 33) {
+                intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+            } else {
+                intent.getParcelableExtra(Intent.EXTRA_STREAM)
+            }
+            single?.let { uris.add(it) }
+        }
+        if (uris.isEmpty()) return
+        intent.action = null
+        if (pageLoaded) {
+            injectShared(uris)
+        } else {
+            pendingSharedUris = uris
+        }
+    }
+
+    private fun injectShared(uris: List<Uri>) {
+        Thread {
+            val images = JSONArray()
+            var date: String? = null
+            uris.forEach { u ->
+                try {
+                    val (dataUrl, d) = compressShared(u)
+                    images.put(dataUrl)
+                    if (date == null && d != null) date = d
+                } catch (e: Exception) {
+                    Log.w("MyDay", "share image failed", e)
+                }
+            }
+            if (images.length() == 0) {
+                toast("无法读取分享的图片")
+                return@Thread
+            }
+            val jo = JSONObject()
+            jo.put("date", date ?: todayNative())
+            jo.put("images", images)
+            runOnUiThread {
+                webView.evaluateJavascript("window.__openFromShare && window.__openFromShare(" + JSONObject.quote(jo.toString()) + ")", null)
+            }
+        }.start()
+    }
+
+    private fun compressShared(uri: Uri): Pair<String, String?> {
+        val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: throw IOException("cannot open $uri")
+        var date: String? = null
+        try {
+            val exif = ExifInterface(ByteArrayInputStream(bytes))
+            date = exifDate(exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL))
+                ?: exifDate(exif.getAttribute(ExifInterface.TAG_DATETIME))
+        } catch (e: Exception) {
+            // no exif
+        }
+        if (date == null) date = filenameDate(displayName(uri))
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        val w = bounds.outWidth
+        val h = bounds.outHeight
+        if (w <= 0 || h <= 0) throw IOException("bad image")
+        var sample = 1
+        val MAX = 1600
+        while (w / sample > MAX * 2 || h / sample > MAX * 2) sample *= 2
+        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+        val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts) ?: throw IOException("decode failed")
+        val scale = Math.min(1f, MAX.toFloat() / Math.max(src.width, src.height))
+        val nw = Math.max(1, Math.round(src.width * scale))
+        val nh = Math.max(1, Math.round(src.height * scale))
+        val out = Bitmap.createBitmap(nw, nh, Bitmap.Config.ARGB_8888)
+        val c = Canvas(out)
+        c.drawColor(Color.WHITE)
+        c.drawBitmap(src, Rect(0, 0, src.width, src.height), Rect(0, 0, nw, nh), null)
+        src.recycle()
+        val bos = ByteArrayOutputStream()
+        out.compress(Bitmap.CompressFormat.JPEG, 82, bos)
+        out.recycle()
+        val dataUrl = "data:image/jpeg;base64," + Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP)
+        return dataUrl to date
+    }
+
+    private fun exifDate(s: String?): String? {
+        val m = Regex("""(\d{4})[:.-](\d{1,2})[:.-](\d{1,2})""").find(s ?: return null) ?: return null
+        val y = m.groupValues[1].toInt()
+        val mo = m.groupValues[2].toInt()
+        val d = m.groupValues[3].toInt()
+        if (y in 2000..2100 && mo in 1..12 && d in 1..31) {
+            return String.format(Locale.US, "%04d-%02d-%02d", y, mo, d)
+        }
+        return null
+    }
+
+    private fun filenameDate(name: String): String? {
+        val base = name.substringAfterLast('/').substringAfterLast('\\')
+            .replace(Regex("""\.\w{1,5}$"""), "")
+        val m = Regex("""(20\d{2})[-_.]?(\d{2})[-_.]?(\d{2})""").find(base) ?: return null
+        val y = m.groupValues[1].toInt()
+        val mo = m.groupValues[2].toInt()
+        val d = m.groupValues[3].toInt()
+        if (y in 2000..2100 && mo in 1..12 && d in 1..31) {
+            return String.format(Locale.US, "%04d-%02d-%02d", y, mo, d)
+        }
+        return null
+    }
+
+    private fun todayNative(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
@@ -164,6 +295,15 @@ class MainActivity : ComponentActivity() {
             }
         }
         webView.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                pageLoaded = true
+                pendingSharedUris?.let { uris ->
+                    pendingSharedUris = null
+                    injectShared(uris)
+                }
+            }
+
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val url = request.url?.toString() ?: return null
                 if (url.startsWith("img://")) {
