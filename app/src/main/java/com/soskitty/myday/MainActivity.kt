@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var imagesDir: File
 
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
+    private var pendingExportYear: String = "all"
 
     private val fileChooserLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -85,8 +86,9 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
             if (uri != null) {
                 val dest = uri
+                val year = pendingExportYear
                 Thread {
-                    val ok = runCatching { writeZip(dest) }.isSuccess
+                    val ok = runCatching { writeZip(dest, year) }.isSuccess
                     notifyJs("__onExportResult", ok)
                 }.start()
             }
@@ -96,8 +98,9 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { treeUri ->
             if (treeUri != null) {
                 val dest = treeUri
+                val year = pendingExportYear
                 Thread {
-                    val ok = runCatching { writeFolder(dest) }.isSuccess
+                    val ok = runCatching { writeFolder(dest, year) }.isSuccess
                     notifyJs("__onExportResult", ok)
                 }.start()
             }
@@ -253,12 +256,14 @@ class MainActivity : ComponentActivity() {
         }
 
         @JavascriptInterface
-        fun exportZip() = runOnUiThread {
-            exportZipLauncher.launch("MyDay_${stamp()}.zip")
+        fun exportZip(year: String) = runOnUiThread {
+            pendingExportYear = year
+            exportZipLauncher.launch("MyDay${yearSuffix(year)}_${stamp()}.zip")
         }
 
         @JavascriptInterface
-        fun exportFolder() = runOnUiThread {
+        fun exportFolder(year: String) = runOnUiThread {
+            pendingExportYear = year
             exportFolderLauncher.launch(null)
         }
 
@@ -268,7 +273,7 @@ class MainActivity : ComponentActivity() {
         }
 
         @JavascriptInterface
-        fun shareZip() = Thread { buildShare() }.start()
+        fun shareZip(year: String) = Thread { buildShare(year) }.start()
 
         @JavascriptInterface
         fun setTheme(dark: Boolean) = runOnUiThread { applyTheme(dark) }
@@ -279,21 +284,50 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun loadEntriesJsonArray(): String {
-        val files = entriesDir.listFiles()?.filter { it.isFile }?.sortedBy { it.name } ?: return "[]"
+    private fun loadEntriesJsonArray(year: String? = null): String = collectEntries(year).first
+
+    private fun yearMatch(year: String?, date: String?): Boolean {
+        if (year == null || year == "all") return true
+        return date != null && date.startsWith(year)
+    }
+
+    private fun collectEntries(year: String?): Triple<String, Set<String>, List<File>> {
+        val files = entriesDir.listFiles()?.filter { it.isFile } ?: return Triple("[]", emptySet(), emptyList())
+        val imgs = HashSet<String>()
+        val included = ArrayList<File>()
         val sb = StringBuilder("[").apply { ensureCapacity(files.size * 512) }
         var first = true
-        files.forEach { f ->
-            if (!first) sb.append(",")
-            first = false
+        files.sortedBy { it.name }.forEach { f ->
             val name = f.name
+            var entryText: String? = null
+            var json: JSONObject? = null
+            var outFile: File? = null
             if (name.matches(Regex("""\d{4}-\d{2}-\d{2}\.json"""))) {
-                sb.append(migrateOldEntry(f).toString())
-            } else {
-                sb.append(f.readText())
+                if (yearMatch(year, name.removeSuffix(".json"))) {
+                    val mig = migrateOldEntry(f)
+                    entryText = mig.toString()
+                    json = mig
+                    outFile = File(entriesDir, (mig.optString("id") ?: "") + ".json")
+                }
+            } else if (name.matches(Regex("""e[a-z0-9_]{4,}\.json"""))) {
+                val jo = try { JSONObject(f.readText()) } catch (e: Exception) { null }
+                if (jo != null && yearMatch(year, jo.optString("date"))) {
+                    entryText = jo.toString()
+                    json = jo
+                    outFile = f
+                }
+            }
+            if (entryText != null) {
+                if (!first) sb.append(",")
+                first = false
+                sb.append(entryText)
+                if (outFile != null && outFile.exists()) included.add(outFile)
+                json?.optJSONArray("images")?.let { arr ->
+                    for (i in 0 until arr.length()) imgs.add(arr.getString(i))
+                }
             }
         }
-        return sb.append("]").toString()
+        return Triple(sb.append("]").toString(), imgs, included)
     }
 
     private fun migrateOldEntry(f: File): JSONObject {
@@ -317,8 +351,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun exportContent(action: (path: String, open: () -> InputStream) -> Unit) {
-        val entries = loadEntriesJsonArray()
+    private fun exportContent(year: String?, action: (path: String, open: () -> InputStream) -> Unit) {
+        val (entries, imgs, files) = collectEntries(year)
         val template = assets.open("index.html").bufferedReader().use { it.readText() }
         val assign = "window.__MYDAY_EXPORT_DATA__="
         val start = template.indexOf(assign)
@@ -334,18 +368,18 @@ class MainActivity : ComponentActivity() {
         val data = "{\"app\":\"MyDay\",\"version\":1,\"exported\":\"${stamp()}\",\"entries\":$entries}"
         action("data.json", { data.byteInputStream() })
 
-        entriesDir.listFiles()?.filter { it.name.endsWith(".json") }?.sortedBy { it.name }?.forEach { f ->
+        files.sortedBy { it.name }.forEach { f ->
             action("entries/${f.name}", { f.inputStream() })
         }
         imagesDir.listFiles()?.filter { it.isFile }?.forEach { f ->
-            action("images/${f.name}", { f.inputStream() })
+            if (imgs.contains(f.name)) action("images/${f.name}", { f.inputStream() })
         }
     }
 
-    private fun writeZip(dest: Uri) {
+    private fun writeZip(dest: Uri, year: String) {
         contentResolver.openOutputStream(dest)?.use { os ->
             ZipOutputStream(BufferedOutputStream(os)).use { zos ->
-                exportContent { path, open ->
+                exportContent(year) { path, open ->
                     zos.putNextEntry(ZipEntry(path))
                     open().use { it.copyTo(zos) }
                     zos.closeEntry()
@@ -354,14 +388,14 @@ class MainActivity : ComponentActivity() {
         } ?: throw IOException("cannot open output stream")
     }
 
-    private fun writeFolder(treeUri: Uri) {
+    private fun writeFolder(treeUri: Uri, year: String) {
         val root = DocumentFile.fromTreeUri(this, treeUri) ?: throw IOException("bad tree uri")
         val site = root.findFile("MyDay_${stamp()}") ?: root.createDirectory("MyDay_${stamp()}")
             ?: throw IOException("cannot create folder")
         site.listFiles().forEach { it.delete() }
         val entriesDoc = site.createDirectory("entries") ?: throw IOException("cannot create entries dir")
         val imagesDoc = site.createDirectory("images") ?: throw IOException("cannot create images dir")
-        exportContent { path, open ->
+        exportContent(year) { path, open ->
             val parts = path.split('/')
             val doc = when (parts[0]) {
                 "entries" -> {
@@ -412,12 +446,12 @@ class MainActivity : ComponentActivity() {
         return imported
     }
 
-    private fun buildShare() {
+    private fun buildShare(year: String) {
         try {
             val dir = File(cacheDir, "export").apply { mkdirs() }
-            val zipFile = File(dir, "MyDay_${stamp()}.zip")
+            val zipFile = File(dir, "MyDay${yearSuffix(year)}_${stamp()}.zip")
             ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile))).use { zos ->
-                exportContent { path, open ->
+                exportContent(year) { path, open ->
                     zos.putNextEntry(ZipEntry(path))
                     open().use { it.copyTo(zos) }
                     zos.closeEntry()
@@ -468,6 +502,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun stamp(): String = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+
+    private fun yearSuffix(year: String): String = if (year == "all" || year.isBlank()) "" else "_$year"
 
     private fun guessExtension(u: Uri): String = when (contentResolver.getType(u)) {
         "image/png" -> ".png"

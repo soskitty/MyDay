@@ -910,17 +910,46 @@ function menuMenu(){
   showSheet([
     { label: '统计信息', sub: stats.entries + ' 篇日记 · ' + stats.images + ' 张图片 · ' + fmtBytes(stats.bytes), fn: function(){} },
     { label: (theme === 'dark') ? '切换为浅色主题' : '切换为深色主题', fn: toggleTheme },
-    { label: '导出备份（.zip）', sub: '完整无损备份，解压后浏览器打开 index.html 即可浏览', fn: function(){ if (IS_APP) window.Android.exportZip(); } },
-    { label: '导出网页文件夹', sub: '把可浏览的网站直接导出到所选文件夹', fn: function(){ if (IS_APP) window.Android.exportFolder(); } },
-    { label: '导入备份', sub: '从之前导出的 .zip 备份恢复', fn: importMenu },
-    { label: '分享备份', sub: '把备份压缩包分享出去', fn: function(){ if (IS_APP) window.Android.shareZip(); } },
+    { label: '导出备份', sub: 'zip / 网页文件夹 / 按年导出', fn: exportMenu },
+    { label: '导入备份', sub: '从之前导出的 .zip 备份恢复，已有覆盖、新增加入', fn: importMenu },
+    { label: '分享备份', sub: '把备份压缩包分享出去', fn: function(){ if (IS_APP) exportRange('share'); } },
     { label: '清空所有日记', sub: '删除全部内容，不可恢复', danger: true, fn: function(){
         if (IS_APP && confirm('确定清空所有数据？此操作不可恢复！')) { try { window.Android.clearAll(); } catch(e) {} toast('已清空'); reload(); }
       } }
   ]);
 }
+function exportMenu(){
+  showSheet([
+    { label: '导出备份（.zip）', sub: '完整无损备份，解压后浏览器打开 index.html 即可浏览', fn: function(){ exportRange('zip'); } },
+    { label: '导出网页文件夹', sub: '把可浏览的网站直接导出到所选文件夹', fn: function(){ exportRange('folder'); } },
+    { label: '分享备份', sub: '把备份压缩包分享出去', fn: function(){ exportRange('share'); } }
+  ]);
+}
+function exportRange(mode){
+  var years = [];
+  var seen = {};
+  for (var i = 0; i < entries.length; i++) {
+    var y = entries[i].date.slice(0, 4);
+    if (!seen[y]) { seen[y] = 1; years.push(y); }
+  }
+  years.sort();
+  years.reverse();
+  var items = [{ label: '全部数据', sub: '导出所有年份', fn: function(){ doExport(mode, 'all'); } }];
+  for (var j = 0; j < years.length; j++) {
+    (function(y){
+      items.push({ label: y + ' 年', sub: '', fn: function(){ doExport(mode, y); } });
+    })(years[j]);
+  }
+  showSheet(items);
+}
+function doExport(mode, year){
+  if (!IS_APP) return;
+  if (mode === 'zip') window.Android.exportZip(year);
+  else if (mode === 'folder') window.Android.exportFolder(year);
+  else window.Android.shareZip(year);
+}
 function importMenu(){
-  if (!confirm('导入将合并数据，同日期、同 id 的日记会被覆盖。\n请选择之前导出的 .zip 备份。')) return;
+  if (!confirm('导入将合并数据：已有日记（相同 id）会被覆盖，其余新增。\n请选择之前导出的 .zip 备份。')) return;
   window.Android.importData();
 }
 
