@@ -63,14 +63,12 @@ main{max-width:700px;margin:0 auto;padding:8px 14px 110px}
 .entry{margin:0 0 14px}
 .entrymeta{display:flex;align-items:center;gap:6px;margin-bottom:4px}
 .entrymeta .icobtn{font-size:14px;width:28px;height:28px;min-width:28px}
-.echip{font-size:12px;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 9px;flex:0 0 auto}
 .grpsum{display:flex;align-items:center;gap:10px;padding:9px 14px 10px;color:var(--muted);font-size:13.5px;line-height:1.5;border-bottom:1px solid var(--line);cursor:pointer}
 .grpsum:active{background:var(--accent-soft)}
 .gpsumimg{width:52px;height:52px;border-radius:10px;object-fit:cover;flex:0 0 auto;background:var(--accent-soft)}
 .grpsum span{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all}
 .row{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);cursor:pointer}
 .row:active{background:var(--accent-soft)}
-.row .echip{flex:0 0 auto}
 .rowthumb{flex:0 0 auto}
 .rowthumb img{width:52px;height:52px;border-radius:10px;object-fit:cover;display:block;background:var(--accent-soft)}
 .rowtxt{flex:1;font-size:14px;color:var(--ink);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all;min-width:0}
@@ -91,6 +89,7 @@ main{max-width:700px;margin:0 auto;padding:8px 14px 110px}
 .edbar{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
 .edbar input[type=date]{flex:1;font-size:16px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);outline:none}
 .savebtn{border:none;background:var(--accent);color:#fff;font-weight:700;padding:9px 18px;border-radius:12px;font-size:15px;cursor:pointer;min-width:64px}
+.timebtn{border:1px solid var(--accent);background:transparent;color:var(--accent);font-weight:600;padding:9px 14px;border-radius:12px;font-size:14px;cursor:pointer;flex:0 0 auto}
 #edText{flex:1;margin:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);
   font-size:17px;line-height:1.8;resize:none;outline:none;min-height:150px}
 .imgstrip{display:flex;gap:8px;overflow-x:auto;padding:0 12px 12px;scrollbar-width:none}
@@ -157,7 +156,7 @@ main{max-width:700px;margin:0 auto;padding:8px 14px 110px}
     <div class="edbar">
       <button class="icobtn" onclick="closeEditor()" title="返回">✕</button>
       <input type="date" id="edDate">
-      <input type="time" id="edTime">
+      <button class="timebtn" onclick="insertTime()" title="在当前光标处插入当前时间">时间</button>
       <button class="savebtn" onclick="saveEntry()">保存</button>
     </div>
     <textarea id="edText" placeholder="记录今天的日常、心情、孩子们的趣事……"></textarea>
@@ -188,14 +187,11 @@ var view = 'timeline';
 var expanded = new Set();
 var theme = 'light';
 var editingId = null;
-var editingTime = '';
 var editingImages = [];
 var pendingImages = [];
 var editorDirty = false;
 var dateAutoSet = false;
 var autoDateDone = false;
-var timeManual = false;
-var autoTimeDone = false;
 var lbLast = 0;
 
 function pad(n){ return n < 10 ? '0' + n : '' + n; }
@@ -284,7 +280,6 @@ function entryBlockHtml(en){
   }
   return '<div class="entry" data-id="' + en.id + '">' +
     '<div class="entrymeta">' +
-      (en.time ? '<span class="echip">' + escapeHtml(en.time) + '</span>' : '') +
       '<span class="spacer"></span>' +
       '<button class="icobtn needapp" onclick="openEditorById(\'' + en.id + '\')" title="编辑">✎</button>' +
       '<button class="icobtn needapp" onclick="deleteEntryById(\'' + en.id + '\')" title="删除">🗑</button>' +
@@ -331,7 +326,6 @@ function dayEntryRowHtml(en){
   return '<div class="row" onclick="openViewer(\'' + en.id + '\')">' +
     thumb +
     '<span class="rowtxt">' + (en.text ? escapeHtml(summaryLines(en.text)) : '（无文字）') + '</span>' +
-    (en.time ? '<span class="echip">' + escapeHtml(en.time) + '</span>' : '') +
     '<button class="icobtn needapp" onclick="event.stopPropagation();openEditorById(\'' + en.id + '\')" title="编辑">✎</button>' +
     '<button class="icobtn needapp" onclick="event.stopPropagation();deleteEntryById(\'' + en.id + '\')" title="删除">🗑</button>' +
   '</div>';
@@ -546,13 +540,10 @@ function openEditorById(id){
   var en = entries.find(function(x){ return x.id === id; });
   if (!en) return;
   editingId = en.id;
-  editingTime = en.time || '';
   dateAutoSet = true;
-  timeManual = true;
   editingImages = (en.images || []).slice();
   pendingImages = [];
   el('edDate').value = en.date;
-  el('edTime').value = en.time || '';
   el('edText').value = en.text;
   editorDirty = false;
   renderEditorImages();
@@ -562,15 +553,11 @@ function openEditorById(id){
 function openNewEntry(date){
   if (!IS_APP) return;
   editingId = null;
-  editingTime = '';
   dateAutoSet = false;
   autoDateDone = false;
-  timeManual = false;
-  autoTimeDone = false;
   editingImages = [];
   pendingImages = [];
   el('edDate').value = date || todayStr();
-  el('edTime').value = '';
   el('edText').value = '';
   editorDirty = false;
   renderEditorImages();
@@ -597,10 +584,15 @@ function applyEditorDate(d){
   el('edDate').value = d;
   editorDirty = true;
 }
-function applyEditorTime(t){
-  if (!/^\d{2}:\d{2}$/.test(t)) return;
-  el('edTime').value = t;
+function insertTime(){
+  var ta = el('edText');
+  var t = nowHM();
+  var s = ta.value || '';
+  var start = (typeof ta.selectionStart === 'number') ? ta.selectionStart : s.length;
+  var end = (typeof ta.selectionEnd === 'number') ? ta.selectionEnd : start;
+  ta.value = s.slice(0, start) + t + s.slice(end);
   editorDirty = true;
+  try { ta.focus(); ta.setSelectionRange(start + t.length, start + t.length); } catch(e) {}
 }
 function closeEditor(){
   if (editorDirty && !confirm('有未保存的修改，确定放弃？')) return false;
@@ -649,10 +641,6 @@ function onPickFiles(files){
         if (res.date) {
           applyEditorDate(res.date);
           autoDateDone = true;
-          if (res.time && !timeManual && !autoTimeDone) {
-            applyEditorTime(res.time);
-            autoTimeDone = true;
-          }
         } else if (!warned) {
           warned = true;
           toast('图片没有日期信息，日期保持原样');
@@ -686,32 +674,9 @@ function dateFromFilename(name){
   if (y >= 2000 && y <= 2100 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return y + '-' + padYear(mo) + '-' + padYear(d);
   return null;
 }
-function normExifTime(s){
-  var m = /^\d{4}[:.-]\d{1,2}[:.-]\d{1,2}T?\s*(\d{1,2}):(\d{2})/.exec(s || '');
-  if (!m) return null;
-  var h = parseInt(m[1], 10), mi = parseInt(m[2], 10);
-  if (h >= 0 && h <= 23 && mi >= 0 && mi <= 59) return padYear(h) + ':' + padYear(mi);
-  return null;
-}
-function timeFromFilename(name){
-  if (!name) return null;
-  var base = String(name).replace(/.*[\\/]/, '').replace(/\.\w{1,5}$/, '');
-  var md = /(20\d{2})[-_.]?(\d{2})[-_.]?(\d{2})/.exec(base);
-  if (!md) return null;
-  var tail = base.slice(md.index + md[0].length);
-  var mt = /[-_. ]?(\d{2})[:.-]?(\d{2})/.exec(tail);
-  if (!mt) return null;
-  var h = parseInt(mt[1], 10), mi = parseInt(mt[2], 10);
-  if (h >= 0 && h <= 23 && mi >= 0 && mi <= 59) return padYear(h) + ':' + padYear(mi);
-  return null;
-}
 function parseExifDate(bytes){
   var r = scanExif(bytes);
   return r ? r.date : null;
-}
-function parseExifTime(bytes){
-  var r = scanExif(bytes);
-  return r ? r.time : null;
 }
 function scanExif(bytes){
   var len = bytes.length;
@@ -758,13 +723,11 @@ function parseTiffExif(bytes, start, end){
     for (var k = 0; k < count; k++) s += String.fromCharCode(bytes[base + k]);
     return s;
   }
-  var out = { date: null, time: null };
+  var out = { date: null };
   function pick(dt){
     if (!dt) return;
     var nd = normExifDate(dt);
-    var nt = normExifTime(dt);
     if (nd) out.date = nd;
-    if (nt) out.time = nt;
   }
   var ifd0 = start + u32(start + 4);
   if (ifd0 < start || ifd0 + 2 > end) return null;
@@ -789,7 +752,7 @@ function parseTiffExif(bytes, start, end){
       }
     }
   }
-  if (!out.date && !out.time) return null;
+  if (!out.date) return null;
   return out;
 }
 function parseExifDateFromDataUrl(dataUrl){
@@ -802,23 +765,12 @@ function parseExifDateFromDataUrl(dataUrl){
     return parseExifDate(bytes);
   } catch (e) { return null; }
 }
-function parseExifTimeFromDataUrl(dataUrl){
-  var m = /^data:image\/(?:jpeg|jpg);base64,/.exec(dataUrl);
-  if (!m) return null;
-  try {
-    var bin = atob(dataUrl.split(',')[1]);
-    var bytes = new Uint8Array(bin.length);
-    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return parseExifTime(bytes);
-  } catch (e) { return null; }
-}
 function compressImage(file){
   return new Promise(function(resolve, reject){
     var reader = new FileReader();
     reader.onerror = function(){ reject(new Error('read')); };
     reader.onload = function(){
       var exifDate = parseExifDateFromDataUrl(reader.result) || dateFromFilename(file.name);
-      var exifTime = parseExifTimeFromDataUrl(reader.result) || timeFromFilename(file.name);
       var img = new Image();
       img.onerror = function(){ reject(new Error('decode')); };
       img.onload = function(){
@@ -850,7 +802,7 @@ function compressImage(file){
             tc.width = 0; tc.height = 0;
           }
           c.width = 0; c.height = 0;
-          resolve({ dataUrl: dataUrl, thumbUrl: thumbUrl, date: exifDate, time: exifTime });
+          resolve({ dataUrl: dataUrl, thumbUrl: thumbUrl, date: exifDate });
         } catch (e) { reject(e); }
       };
       img.src = reader.result;
@@ -876,7 +828,7 @@ function saveEntry(){
   if (!id) {
     id = 'e' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
   }
-  var time = el('edTime').value || editingTime || nowHM();
+  var time = '';
   var originalImages = editingImages.slice();
   var names = editingImages.slice();
   var idx = nextNum(id, names) + 1;
@@ -903,7 +855,6 @@ function saveEntry(){
   var ok = false;
   try { ok = window.Android.saveEntry(id, json); } catch(e) {}
   editingId = id;
-  editingTime = time;
   editingImages = names;
   editorDirty = false;
   if (ok) {
@@ -984,7 +935,7 @@ function openViewer(id){
     '<div class="vbar">' +
       '<button class="icobtn" onclick="closeViewer()" title="返回">✕</button>' +
       '<span class="vt">' + formatDayLabel(en.date) + '</span>' +
-      '<span class="vsub">' + en.date + (en.time ? ' · ' + escapeHtml(en.time) : '') + '</span>' +
+      '<span class="vsub">' + en.date + '</span>' +
       '<button class="icobtn needapp" onclick="closeViewer();openEditorById(\'' + en.id + '\')" title="编辑">✎</button>' +
       '<button class="icobtn needapp" onclick="closeViewer();deleteEntryById(\'' + en.id + '\')" title="删除">🗑</button>' +
     '</div>' +
@@ -1165,10 +1116,6 @@ el('edText').addEventListener('input', function(){ editorDirty = true; });
 el('edDate').addEventListener('change', function(){
   dateAutoSet = true;
   applyEditorDate(el('edDate').value);
-});
-el('edTime').addEventListener('change', function(){
-  timeManual = true;
-  applyEditorTime(el('edTime').value);
 });
 el('sheet').addEventListener('click', sheetBlank);
 
