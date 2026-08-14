@@ -77,35 +77,25 @@ main{max-width:700px;margin:0 auto;padding:8px 14px 110px}
 .rowtxt{flex:1;font-size:14px;color:var(--ink);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all;min-width:0}
 .dayadd{width:100%;margin-top:8px;padding:10px;border:1.5px dashed var(--line);border-radius:12px;background:transparent;color:var(--muted);font-size:14px;cursor:pointer}
 .dayadd:active{background:var(--accent-soft)}
-.daygrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;padding:10px 12px 12px}
-.dcell{background:var(--bg-soft);border-radius:14px;padding:10px;cursor:pointer}
-.dcell:active{background:var(--accent-soft)}
-.dcell.open{grid-column:1 / -1}
-.dcellhead{display:flex;align-items:center;gap:6px;margin-bottom:8px}
-.dcelltitle{font-weight:700;font-size:15px}
-.dcellmeta{font-size:12px;color:var(--muted);margin-left:auto;white-space:nowrap}
-.dcell .gchev{font-size:12px;margin-left:2px}
-.dcellimgs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
-.dcellimgs img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:7px;display:block;background:var(--accent-soft)}
-.dcellsum{font-size:12.5px;color:var(--muted);margin-top:8px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all}
-.dcellbody{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px}
-.drow{padding:4px 0 12px;border-bottom:1px solid var(--line);cursor:pointer}
-.drow:last-child{border-bottom:none;padding-bottom:2px}
-.drow:active{background:var(--accent-soft)}
-.drowtext{font-size:14px;line-height:1.7;overflow-wrap:break-word}
-.drowimgs{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.drowimgs img{width:72px;height:72px;object-fit:cover;border-radius:8px;display:block;background:var(--accent-soft)}
-.drowempty{font-size:13px;color:var(--muted)}
-.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;padding:10px 12px 12px}
-.mcell{background:var(--bg-soft);border-radius:14px;padding:12px;cursor:pointer}
-.mcell:active{background:var(--accent-soft)}
-.mcellhead{display:flex;align-items:center;gap:6px;margin-bottom:10px}
-.mcelltitle{font-weight:800;font-size:17px}
-.mcellmeta{font-size:12.5px;color:var(--muted);margin-left:auto;white-space:nowrap}
-.mcell .gchev{font-size:12px;margin-left:2px}
-.mcellimgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:5px}
-.mcellimgs img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:7px;display:block;background:var(--accent-soft)}
-.mcellbody{margin-top:12px;border-top:1px dashed var(--line);padding-top:2px}
+.monthwall{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;padding:10px 12px 12px;align-items:start}
+.mwall{background:var(--bg-soft);border-radius:14px;padding:12px}
+.mwallhead{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}
+.mwalltitle{font-weight:800;font-size:17px}
+.mwallmeta{font-size:12.5px;color:var(--muted);margin-left:auto;white-space:nowrap}
+.mwalldays{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
+.mdaybadge{font-size:11px;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 8px}
+.mwallimgs{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.mwallimgs img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;display:block;background:var(--accent-soft);cursor:pointer}
+.mwalltexts{margin-top:10px}
+.mtext{font-size:12.5px;color:var(--muted);line-height:1.6;padding:3px 0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all;cursor:pointer}
+.mtext:active{color:var(--ink)}
+.mtextdate{font-weight:600;color:var(--ink);font-size:12px}
+.mwallfoot{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px}
+.mwallbtn{width:100%;border:none;background:var(--accent);color:#fff;font-weight:700;padding:8px;border-radius:10px;font-size:13.5px;cursor:pointer}
+.mwallbtn:active{opacity:.85}
+.filterbar{display:flex;align-items:center;gap:8px;background:var(--accent-soft);border-radius:10px;padding:8px 14px;margin-bottom:10px;color:var(--accent);font-weight:600;font-size:13.5px}
+.filterx{border:none;background:transparent;color:inherit;font-size:14px;cursor:pointer;padding:0;margin-left:auto}
+.filterx:active{opacity:.6}
 .card{background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);cursor:pointer;position:relative;transition:transform .1s}
 .card:active{transform:scale(.97)}
 .cardimg{height:120px;overflow:hidden;background:var(--accent-soft)}
@@ -221,6 +211,7 @@ function el(id){ return document.getElementById(id); }
 
 var entries = [];
 var view = 'timeline';
+var monthFilter = '';
 var expanded = new Set();
 var theme = 'light';
 var editingId = null;
@@ -267,6 +258,25 @@ function fmtBytes(b){
   return (b / 1048576).toFixed(1) + ' MB';
 }
 
+function normalizeEntry(raw){
+  if (!raw || typeof raw !== 'object') return null;
+  var rand = function(){ return Math.random().toString(36).slice(2, 6); };
+  var now = Date.now();
+  var e = {};
+  var k, i;
+  for (k in raw) { if (Object.prototype.hasOwnProperty.call(raw, k)) e[k] = raw[k]; }
+  e.v = (typeof raw.v === 'number') ? raw.v : 0;
+  if (typeof raw.id !== 'string' || !raw.id) e.id = 'e' + now + '_' + rand();
+  if (typeof raw.date !== 'string') e.date = '';
+  else if (!/^\d{4}-\d{2}-\d{2}$/.test(raw.date)) e.date = '';
+  if (typeof raw.text !== 'string') e.text = (raw.text == null) ? '' : String(raw.text);
+  e.images = Array.isArray(raw.images) ? raw.images.filter(function(n){ return typeof n === 'string'; }) : [];
+  if (typeof raw.time !== 'string') e.time = '';
+  if (typeof raw.created !== 'number' || !isFinite(raw.created)) {
+    e.created = (raw.created && isFinite(+raw.created)) ? +raw.created : 0;
+  }
+  return e;
+}
 function loadEntries(){
   var list = [];
   if (IS_APP) {
@@ -274,37 +284,14 @@ function loadEntries(){
   } else if (EMBEDDED) {
     list = EMBEDDED.slice();
   }
-  var rand = function(){ return Math.random().toString(36).slice(2, 6); };
-  entries = list.map(function(e){
-    return {
-      id: e.id || ('e' + Date.now() + '_' + rand()),
-      date: e.date || '',
-      time: e.time || '',
-      text: e.text || '',
-      images: (e.images || []).slice(),
-      created: e.created || 0
-    };
-  }).filter(function(e){ return /^\d{4}-\d{2}-\d{2}$/.test(e.date); });
+  entries = list.map(normalizeEntry).filter(Boolean).filter(function(e){ return /^\d{4}-\d{2}-\d{2}$/.test(e.date); });
   entries.sort(function(a, b){
     if (a.date !== b.date) return a.date < b.date ? 1 : -1;
     return (a.created || 0) - (b.created || 0);
   });
 }
 function groupByDate(){
-  var m = new Map();
-  for (var i = 0; i < entries.length; i++) {
-    var e = entries[i];
-    if (!m.has(e.date)) m.set(e.date, { date: e.date, list: [], imgs: [], allImgs: [] });
-    var g = m.get(e.date);
-    g.list.push(e);
-    for (var j = 0; j < e.images.length; j++) {
-      if (g.imgs.length < 3) g.imgs.push(e.images[j]);
-      g.allImgs.push(e.images[j]);
-    }
-  }
-  var arr = Array.from(m.values());
-  arr.sort(function(a, b){ return a.date < b.date ? 1 : -1; });
-  return arr;
+  return groupEntries(entries);
 }
 
 function emptyHtml(){
@@ -349,8 +336,24 @@ function streamHtml(dayGroups){
 }
 function renderTimeline(){
   var main = el('list');
-  if (!entries.length) { main.innerHTML = emptyHtml(); return; }
-  main.innerHTML = streamHtml(groupByDate());
+  var filtered = entries;
+  if (monthFilter) filtered = entries.filter(function(e){ return e.date.indexOf(monthFilter) === 0; });
+  if (!filtered.length && !entries.length) { main.innerHTML = emptyHtml(); return; }
+  var html = '';
+  if (monthFilter) {
+    html += '<div class="filterbar"><span>' + monthLabel(monthFilter) + ' 流水</span>' +
+      '<button class="filterx" onclick="clearMonthFilter()" title="清除筛选">✕</button></div>';
+  }
+  if (filtered.length) html += streamHtml(groupEntries(filtered));
+  main.innerHTML = html;
+}
+function setMonthFilter(key){
+  monthFilter = key;
+  setView('timeline');
+}
+function clearMonthFilter(){
+  monthFilter = '';
+  render();
 }
 
 function dayThumbsHtml(g){
@@ -462,68 +465,53 @@ function grpHtml(g, hkey, open, label){
     '<span class="gchev">' + (open ? '▾' : '▸') + '</span>' +
   '</button>';
 }
-function dayGridRowHtml(en){
-  var ths = '';
-  for (var i = 0; i < en.images.length; i++) ths += thumbImgTag(en.images[i], 'drowimg', '');
-  var hasText = !!en.text;
-  return '<div class="drow" onclick="openViewer(\'' + en.id + '\')">' +
-    (hasText ? '<div class="drowtext">' + escapeHtml(en.text).replace(/\n/g, '<br>') + '</div>' : '') +
-    (ths ? '<div class="drowimgs">' + ths + '</div>' : '') +
-    (!hasText && !en.images.length ? '<div class="drowempty">（空日记）</div>' : '') +
-  '</div>';
-}
-function dayCellHtml(g){
-  var key = 'd_' + g.date;
-  var open = expanded.has(key);
+function monthWallHtml(mm){
+  var days = mm.days;
   var thumbs = '';
-  for (var i = 0; i < g.allImgs.length; i++) thumbs += thumbImgTag(g.allImgs[i], 'dcellimg', '');
-  var first = g.list[0];
-  var html = '<div class="dcell' + (open ? ' open' : '') + '" onclick="toggleKey(\'' + key + '\')">' +
-    '<div class="dcellhead">' +
-      '<span class="dcelltitle">' + formatDayLabel(g.date) + '</span>' +
-      '<span class="dcellmeta">' + g.date.slice(5) + ' · ' + g.list.length + ' 篇' + (g.allImgs.length ? ' · ' + g.allImgs.length + ' 图' : '') + '</span>' +
-      '<span class="gchev">' + (open ? '▾' : '▸') + '</span>' +
-    '</div>' +
-    (thumbs ? '<div class="dcellimgs">' + thumbs + '</div>' : '') +
-    (first.text ? '<div class="dcellsum">' + escapeHtml(summaryLines(first.text)) + '</div>' : '');
-  if (open) {
-    html += '<div class="dcellbody">';
-    for (var j = 0; j < g.list.length; j++) html += dayGridRowHtml(g.list[j]);
-    html += '</div>';
+  var i, j, k;
+  for (i = 0; i < days.length; i++) {
+    var g = days[i];
+    for (j = 0; j < g.list.length; j++) {
+      var en = g.list[j];
+      for (k = 0; k < en.images.length; k++) {
+        thumbs += thumbImgTag(en.images[k], 'mthumb', 'openViewer(\'' + en.id + '\')');
+      }
+    }
   }
-  return html + '</div>';
-}
-function dayGridHtml(days){
-  var html = '<div class="daygrid">';
-  for (var i = 0; i < days.length; i++) html += dayCellHtml(days[i]);
-  return html + '</div>';
-}
-function monthCellHtml(mm, mkey, mopen){
-  var thumbs = '';
-  for (var i = 0; i < mm.allImgs.length; i++) thumbs += thumbImgTag(mm.allImgs[i], 'mcellimg', '');
-  return '<div class="mcell" onclick="toggleKey(\'' + mkey + '\')">' +
-    '<div class="mcellhead">' +
-      '<span class="mcelltitle">' + mm.label + '</span>' +
-      '<span class="mcellmeta">' + mm.dayCount + ' 天 · ' + mm.entryCount + ' 篇 · ' + mm.imgCount + ' 图</span>' +
-      '<span class="gchev">' + (mopen ? '▾' : '▸') + '</span>' +
+  var badges = '';
+  for (i = 0; i < days.length; i++) badges += '<span class="mdaybadge">' + (+days[i].date.slice(8)) + '日</span>';
+  var texts = '';
+  for (i = 0; i < days.length; i++) {
+    var g2 = days[i];
+    for (j = 0; j < g2.list.length; j++) {
+      var en2 = g2.list[j];
+      if (en2.text) {
+        texts += '<div class="mtext" onclick="openViewer(\'' + en2.id + '\')">' +
+          '<span class="mtextdate">' + (+g2.date.slice(5, 7)) + '/' + (+g2.date.slice(8)) + '</span> ' +
+          escapeHtml(summaryLines(en2.text)) + '</div>';
+      }
+    }
+  }
+  return '<div class="mwall">' +
+    '<div class="mwallhead">' +
+      '<span class="mwalltitle">' + mm.label + '</span>' +
+      '<span class="mwallmeta">' + mm.dayCount + ' 天 · ' + mm.entryCount + ' 篇 · ' + mm.imgCount + ' 图</span>' +
     '</div>' +
-    (thumbs ? '<div class="mcellimgs">' + thumbs + '</div>' : '') +
-    (mopen ? '<div class="mcellbody">' + dayGridHtml(mm.days) + '</div>' : '') +
+    (badges ? '<div class="mwalldays">' + badges + '</div>' : '') +
+    (thumbs ? '<div class="mwallimgs">' + thumbs + '</div>' : '') +
+    (texts ? '<div class="mwalltexts">' + texts + '</div>' : '') +
+    '<div class="mwallfoot">' +
+      '<button class="mwallbtn" onclick="setMonthFilter(\'' + mm.key + '\')">查看流水 ▸</button>' +
+    '</div>' +
   '</div>';
 }
 function renderMonth(){
   var main = el('list');
   if (!entries.length) { main.innerHTML = emptyHtml(); return; }
   var groups = groupMonths();
-  var html = '';
-  for (var i = 0; i < groups.length; i++) {
-    var g = groups[i];
-    var hkey = 'm_' + g.key;
-    var open = expanded.has(hkey);
-    html += '<section class="grp">' + grpHtml(g, hkey, open, g.label);
-    if (open) html += dayGridHtml(g.days);
-    html += '</section>';
-  }
+  var html = '<div class="monthwall">';
+  for (var i = 0; i < groups.length; i++) html += monthWallHtml(groups[i]);
+  html += '</div>';
   main.innerHTML = html;
 }
 function renderYear(){
@@ -537,17 +525,29 @@ function renderYear(){
     var yopen = expanded.has(ykey);
     html += '<section class="grp">' + grpHtml(y, ykey, yopen, y.label);
     if (yopen) {
-      html += '<div class="mgrid">';
-      for (var j = 0; j < y.months.length; j++) {
-        var mm = y.months[j];
-        var mkey = 'm_' + mm.key;
-        html += monthCellHtml(mm, mkey, expanded.has(mkey));
-      }
+      html += '<div class="monthwall">';
+      for (var j = 0; j < y.months.length; j++) html += monthWallHtml(y.months[j]);
       html += '</div>';
     }
     html += '</section>';
   }
   main.innerHTML = html;
+}
+function groupEntries(list){
+  var m = new Map();
+  for (var i = 0; i < list.length; i++) {
+    var e = list[i];
+    if (!m.has(e.date)) m.set(e.date, { date: e.date, list: [], imgs: [], allImgs: [] });
+    var g = m.get(e.date);
+    g.list.push(e);
+    for (var j = 0; j < e.images.length; j++) {
+      if (g.imgs.length < 3) g.imgs.push(e.images[j]);
+      g.allImgs.push(e.images[j]);
+    }
+  }
+  var arr = Array.from(m.values());
+  arr.sort(function(a, b){ return a.date < b.date ? 1 : -1; });
+  return arr;
 }
 function toggleKey(key){
   if (expanded.has(key)) expanded.delete(key); else expanded.add(key);
@@ -924,7 +924,19 @@ function saveEntry(){
     try { window.Android.deleteImage(n.replace(/(\.\w{1,5})$/, '_t$1')); } catch(e) {}
   });
   var created = Date.now();
-  var json = JSON.stringify({ id: id, date: d, time: time, text: el('edText').value, images: names, created: created });
+  var orig = null;
+  for (var q = 0; q < entries.length; q++) if (entries[q].id === id) { orig = entries[q]; break; }
+  var out = {};
+  var f;
+  if (orig) for (f in orig) { if (Object.prototype.hasOwnProperty.call(orig, f)) out[f] = orig[f]; }
+  out.v = 1;
+  out.id = id;
+  out.date = d;
+  out.time = time;
+  out.text = el('edText').value;
+  out.images = names.slice();
+  out.created = created;
+  var json = JSON.stringify(out);
   var ok = false;
   try { ok = window.Android.saveEntry(id, json); } catch(e) {}
   editingId = id;
@@ -933,7 +945,9 @@ function saveEntry(){
   if (ok) {
     toast('已保存');
     closeEditor();
-    var e2 = { id: id, date: d, time: time, text: el('edText').value, images: names.slice(), created: created };
+    var e2 = {};
+    for (f in out) { if (Object.prototype.hasOwnProperty.call(out, f)) e2[f] = out[f]; }
+    e2.images = names.slice();
     var ix = -1;
     for (var k = 0; k < entries.length; k++) if (entries[k].id === id) { ix = k; break; }
     if (ix >= 0) entries[ix] = e2; else entries.push(e2);

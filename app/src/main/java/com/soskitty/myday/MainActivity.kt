@@ -53,6 +53,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private lateinit var entriesDir: File
     private lateinit var imagesDir: File
+    // 存储：filesDir/entries/<id>.json（条目 JSON，原样落盘）+ filesDir/images/<file>
+    // 条目 schema：见 normalizeEntry(JS) 与导出 README.txt；格式随 v 字段演进，未知字段全程保留
 
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private var pendingExportYear: String = "all"
@@ -482,6 +484,9 @@ class MainActivity : ComponentActivity() {
         jo.put("id", id)
         if (!jo.has("created")) jo.put("created", created)
         if (!jo.has("time")) jo.put("time", "")
+        if (!jo.has("v")) jo.put("v", 1)
+        if (!jo.has("text")) jo.put("text", "")
+        if (!jo.has("images")) jo.put("images", JSONArray())
         return try {
             File(entriesDir, "$id.json").writeText(jo.toString())
             f.delete()
@@ -507,6 +512,30 @@ class MainActivity : ComponentActivity() {
 
         val data = "{\"app\":\"MyDay\",\"version\":1,\"exported\":\"${stamp()}\",\"entries\":$entries}"
         action("data.json", { data.byteInputStream() })
+
+        val readme = "MyDay 数据备份格式 v1\n" +
+            "=====================\n" +
+            "\n" +
+            "文件结构：\n" +
+            "  index.html        网页快照（可离线浏览）\n" +
+            "  data.json         数据信封 {\"app\":\"MyDay\",\"version\":1,\"exported\":\"...\",\"entries\":[...]}\n" +
+            "  entries/<id>.json 每条日记一个 JSON 文件（与 data.json 内容一致，互为冗余）\n" +
+            "  images/           图片（原图 + 缩略图 <name>_t.<ext>）\n" +
+            "\n" +
+            "条目字段：\n" +
+            "  v       条目格式版本（v 缺失视为 v0 旧版；升级只补字段、永不删除）\n" +
+            "  id      唯一标识（e<毫秒>_<随机>）\n" +
+            "  date    日期 yyyy-MM-dd\n" +
+            "  time    时间 HH:mm（历史字段，新数据为空字符串）\n" +
+            "  text    正文（\\n 表示换行）\n" +
+            "  images  图片文件名数组\n" +
+            "  created 创建时间戳（毫秒）\n" +
+            "\n" +
+            "兼容性约定：\n" +
+            "  - 未知字段重新保存/导入时原样保留，不做丢弃\n" +
+            "  - 信封 version 仅在文件布局变化时递增；条目格式变化走 v 字段\n" +
+            "  - 本 zip 目录下的 entries/ + images/ 即完整数据，data.json 为冗余副本\n"
+        action("README.txt", { readme.byteInputStream() })
 
         files.sortedBy { it.name }.forEach { f ->
             action("entries/${f.name}", { f.inputStream() })
@@ -559,6 +588,7 @@ class MainActivity : ComponentActivity() {
 
     private fun readZip(src: Uri): Int {
         var imported = 0
+        var dataJson: String? = null
         contentResolver.openInputStream(src)?.use { ins ->
             ZipInputStream(BufferedInputStream(ins)).use { zis ->
                 var e = zis.nextEntry
@@ -573,7 +603,10 @@ class MainActivity : ComponentActivity() {
                                 File(entriesDir, leaf).writeText(json)
                                 imported++
                             }
-                        } else if (name.contains("images/") && name.substringAfterLast('/').endsWith(".jpg")) {
+                        } else if (name.substringAfterLast('/') == "data.json") {
+                            dataJson = zis.readBytes().toString(Charsets.UTF_8)
+                        } else if (name.contains("images/") &&
+                            name.substringAfterLast('/').matches(Regex("""\w+\.(jpg|jpeg|png|webp)$""", RegexOption.IGNORE_CASE))) {
                             val leaf = name.substringAfterLast('/')
                             File(imagesDir, leaf).outputStream().use { os -> zis.copyTo(os) }
                         }
@@ -583,6 +616,21 @@ class MainActivity : ComponentActivity() {
                 }
             }
         } ?: throw IOException("cannot open input stream")
+        if (imported == 0 && dataJson != null) {
+            try {
+                val jo = JSONObject(dataJson)
+                val arr = jo.optJSONArray("entries") ?: return 0
+                for (i in 0 until arr.length()) {
+                    val en = arr.getJSONObject(i)
+                    val id = en.optString("id")
+                    if (id.isBlank() || !id.matches(Regex("""e[a-z0-9_]{4,}"""))) continue
+                    File(entriesDir, "$id.json").writeText(en.toString())
+                    imported++
+                }
+            } catch (e: Exception) {
+                Log.w("MyDay", "data.json fallback import failed", e)
+            }
+        }
         return imported
     }
 
