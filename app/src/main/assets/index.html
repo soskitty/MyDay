@@ -30,6 +30,9 @@ header{
 }
 .brand{font-weight:800;font-size:19px;letter-spacing:.5px;display:flex;align-items:center;gap:8px;flex:1;white-space:nowrap;cursor:pointer;user-select:none}
 .brand .dot{width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.viewtabs{display:flex;gap:2px;background:var(--accent-soft);border-radius:10px;padding:2px;flex:0 0 auto}
+.viewtab{border:none;background:transparent;color:var(--ink);font-size:14px;font-weight:600;width:34px;height:30px;border-radius:8px;cursor:pointer}
+.viewtab.on{background:var(--accent);color:#fff}
 .icobtn{width:38px;height:38px;min-width:38px;border:none;border-radius:12px;background:transparent;color:var(--ink);
   font-size:19px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background .15s}
 .icobtn:active{background:var(--accent-soft)}
@@ -143,7 +146,12 @@ main{max-width:700px;margin:0 auto;padding:8px 14px 110px}
 <body>
 <header>
   <div class="brand" onclick="goDefaultView()" title="回到流水视图"><span class="dot"></span>MyDay</div>
-  <button class="icobtn" id="btnToggle" onclick="viewMenu()" title="切换视图">▦</button>
+  <div class="viewtabs" id="viewTabs">
+    <button class="viewtab" data-view="timeline" onclick="setView('timeline')">流</button>
+    <button class="viewtab" data-view="day" onclick="setView('day')">日</button>
+    <button class="viewtab" data-view="month" onclick="setView('month')">月</button>
+    <button class="viewtab" data-view="year" onclick="setView('year')">年</button>
+  </div>
   <button class="icobtn needapp" id="btnNew" onclick="newEntry()" title="写日记">＋</button>
   <button class="icobtn" id="btnMenu" onclick="menuMenu()" title="菜单">⋯</button>
 </header>
@@ -475,28 +483,22 @@ function render(){
   else renderYear();
 }
 
-function viewLabel(){
-  if (view === 'timeline') return '流水';
-  if (view === 'day') return '按日';
-  if (view === 'month') return '按月';
-  return '按年';
-}
 function setView(v){
   view = v;
   try { localStorage.setItem('myday-view', view); } catch(e) {}
   render();
+  updateViewTabs();
 }
 function goDefaultView(){
   if (view !== 'timeline') setView('timeline');
-  updateToggleBtn();
+  updateViewTabs();
 }
-function viewMenu(){
-  showSheet([
-    { label: '流水视图', sub: '多日连续滑动浏览', fn: function(){ setView('timeline'); } },
-    { label: '目录 · 按日', sub: '每天一张卡片', fn: function(){ setView('day'); } },
-    { label: '目录 · 按月', sub: '按月份折叠浏览', fn: function(){ setView('month'); } },
-    { label: '目录 · 按年', sub: '年份 → 月份 → 按日', fn: function(){ setView('year'); } }
-  ]);
+function updateViewTabs(){
+  var tabs = document.querySelectorAll('.viewtab');
+  for (var i = 0; i < tabs.length; i++) {
+    if (tabs[i].getAttribute('data-view') === view) tabs[i].classList.add('on');
+    else tabs[i].classList.remove('on');
+  }
 }
 
 function updateFooter(){
@@ -507,12 +509,6 @@ function updateFooter(){
     try { var s = JSON.parse(window.Android.getStats()); bytesTxt = ' · ' + fmtBytes(s.bytes); } catch(e) {}
   }
   el('footer').textContent = '共 ' + n + ' 篇 · ' + imgs + ' 张图片' + bytesTxt;
-}
-
-function updateToggleBtn(){
-  var b = el('btnToggle');
-  b.textContent = '▦';
-  b.title = '切换视图（当前：' + viewLabel() + '）';
 }
 
 function toggleTheme(){
@@ -1124,7 +1120,7 @@ var savedView = null;
 try { savedView = localStorage.getItem('myday-view'); } catch(e) {}
 if (savedView === 'timeline' || savedView === 'day' || savedView === 'month' || savedView === 'year') view = savedView;
 if (!IS_APP) document.body.classList.add('browser');
-updateToggleBtn();
+updateViewTabs();
 loadEntries();
 render();
 updateFooter();
