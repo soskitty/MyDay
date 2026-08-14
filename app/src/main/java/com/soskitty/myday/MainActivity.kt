@@ -215,7 +215,7 @@ class MainActivity : ComponentActivity() {
             if (!date.matches(Regex("""\d{4}-\d{2}-\d{2}"""))) return false
             val f = File(entriesDir, "$date.json")
             val deleted = f.delete()
-            imagesDir.listFiles { it.name.startsWith("${date}_") }?.forEach { it.delete() }
+            imagesDir.listFiles()?.filter { it.name.startsWith("${date}_") }?.forEach { it.delete() }
             return deleted
         }
 
@@ -245,8 +245,8 @@ class MainActivity : ComponentActivity() {
 
         @JavascriptInterface
         fun getStats(): String = try {
-            val files = entriesDir.listFiles { it.name.endsWith(".json") } ?: emptyArray()
-            val imgs = imagesDir.listFiles { it.isFile } ?: emptyArray()
+            val files = entriesDir.listFiles()?.filter { it.name.endsWith(".json") } ?: emptyArray()
+            val imgs = imagesDir.listFiles()?.filter { it.isFile } ?: emptyArray()
             val bytes = files.sumOf { it.length() } + imgs.sumOf { it.length() }
             "{\"entries\":${files.size},\"images\":${imgs.size},\"bytes\":$bytes}"
         } catch (e: Exception) {
@@ -281,7 +281,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun loadEntriesJsonArray(): String {
-        val files = entriesDir.listFiles { it.name.endsWith(".json") }?.sortedBy { it.name } ?: return "[]"
+        val files = entriesDir.listFiles()?.filter { it.name.endsWith(".json") }?.sortedBy { it.name } ?: return "[]"
         val sb = StringBuilder("[").apply { ensureCapacity(files.size * 512) }
         files.forEachIndexed { i, f ->
             if (i > 0) sb.append(",")
@@ -304,10 +304,10 @@ class MainActivity : ComponentActivity() {
         val data = "{\"app\":\"MyDay\",\"version\":1,\"exported\":\"${stamp()}\",\"entries\":$entries}"
         action("data.json", { data.byteInputStream() })
 
-        entriesDir.listFiles { it.name.endsWith(".json") }?.sortedBy { it.name }?.forEach { f ->
+        entriesDir.listFiles()?.filter { it.name.endsWith(".json") }?.sortedBy { it.name }?.forEach { f ->
             action("entries/${f.name}", { f.inputStream() })
         }
-        imagesDir.listFiles { it.isFile }?.forEach { f ->
+        imagesDir.listFiles()?.filter { it.isFile }?.forEach { f ->
             action("images/${f.name}", { f.inputStream() })
         }
     }
