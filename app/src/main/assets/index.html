@@ -28,7 +28,7 @@ header{
   padding:10px 12px;background:color-mix(in srgb,var(--bg) 86%,transparent);
   backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--line);
 }
-.brand{font-weight:800;font-size:19px;letter-spacing:.5px;display:flex;align-items:center;gap:8px;flex:1;white-space:nowrap}
+.brand{font-weight:800;font-size:19px;letter-spacing:.5px;display:flex;align-items:center;gap:8px;flex:1;white-space:nowrap;cursor:pointer;user-select:none}
 .brand .dot{width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 .icobtn{width:38px;height:38px;min-width:38px;border:none;border-radius:12px;background:transparent;color:var(--ink);
   font-size:19px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background .15s}
@@ -138,7 +138,7 @@ main{max-width:700px;margin:0 auto;padding:8px 14px 110px}
 </head>
 <body>
 <header>
-  <div class="brand"><span class="dot"></span>MyDay</div>
+  <div class="brand" onclick="goDefaultView()" title="回到流水视图"><span class="dot"></span>MyDay</div>
   <button class="icobtn" id="btnToggle" onclick="viewMenu()" title="切换视图">▦</button>
   <button class="icobtn needapp" id="btnNew" onclick="newEntry()" title="写日记">＋</button>
   <button class="icobtn" id="btnMenu" onclick="menuMenu()" title="菜单">⋯</button>
@@ -212,6 +212,12 @@ function escapeHtml(s){
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 function imgSrc(name){ return IS_APP ? ('img://' + name) : ('images/' + name); }
+function thumbSrc(name){ return IS_APP ? imgSrc(name.replace(/(\.\w{1,5})$/, '_t$1')) : imgSrc(name); }
+function thumbImgTag(name, cls, onclick){
+  var fb = IS_APP ? ' onerror="this.onerror=null;this.src=\'' + imgSrc(name) + '\'"' : '';
+  var oc = onclick ? ' onclick="' + onclick + '"' : '';
+  return '<img class="' + cls + '" src="' + thumbSrc(name) + '" alt="" loading="lazy"' + fb + oc + '>';
+}
 function summaryLines(text){
   var lines = String(text).split('\n').map(function(l){ return l.trim(); }).filter(Boolean).slice(0, 2);
   var s = lines.join(' ');
@@ -269,7 +275,7 @@ function entryBlockHtml(en){
   var textHtml = escapeHtml(en.text).replace(/\n/g, '<br>');
   var imgs = '';
   for (var i = 0; i < en.images.length; i++) {
-    imgs += '<img class="timg" src="' + imgSrc(en.images[i]) + '" alt="" loading="lazy" onclick="openLightbox(\'' + en.images[i] + '\')">';
+    imgs += thumbImgTag(en.images[i], 'timg', 'openLightbox(\'' + en.images[i] + '\')');
   }
   return '<div class="entry" data-id="' + en.id + '">' +
     '<div class="entrymeta">' +
@@ -310,13 +316,13 @@ function renderTimeline(){
 function dayThumbsHtml(g){
   var thumbs = '';
   for (var i = 0; i < g.imgs.length; i++) {
-    thumbs += '<span class="gthumb"><img src="' + imgSrc(g.imgs[i]) + '" alt="" loading="lazy"></span>';
+    thumbs += '<span class="gthumb">' + thumbImgTag(g.imgs[i], '', '') + '</span>';
   }
   return thumbs ? '<span class="gthumbs">' + thumbs + '</span>' : '';
 }
 function dayEntryRowHtml(en){
   var thumb = '';
-  if (en.images.length) thumb = '<span class="rowthumb"><img src="' + imgSrc(en.images[0]) + '" alt="" loading="lazy"></span>';
+  if (en.images.length) thumb = '<span class="rowthumb">' + thumbImgTag(en.images[0], 'rowthumb', '') + '</span>';
   return '<div class="row" onclick="openViewer(\'' + en.id + '\')">' +
     thumb +
     '<span class="rowtxt">' + (en.text ? escapeHtml(summaryLines(en.text)) : '（无文字）') + '</span>' +
@@ -337,7 +343,7 @@ function daySectionHtml(g){
       '<span class="gchev">' + (open ? '▾' : '▸') + '</span>' +
     '</button>' +
     '<div class="grpsum" onclick="openViewer(\'' + first.id + '\')">' +
-      (first.images[0] ? '<img class="gpsumimg" src="' + imgSrc(first.images[0]) + '" alt="" loading="lazy">' : '') +
+      (first.images[0] ? thumbImgTag(first.images[0], 'gpsumimg', '') : '') +
       '<span>' + (first.text ? escapeHtml(summaryLines(first.text)) : '（无文字）') + '</span>' +
     '</div>';
   if (open) {
@@ -480,6 +486,10 @@ function setView(v){
   view = v;
   try { localStorage.setItem('myday-view', view); } catch(e) {}
   render();
+}
+function goDefaultView(){
+  if (view !== 'timeline') setView('timeline');
+  updateToggleBtn();
 }
 function viewMenu(){
   showSheet([
@@ -643,7 +653,7 @@ function onPickFiles(files){
           toast('图片没有日期信息，日期保持原样');
         }
       }
-      pendingImages.push({ dataUrl: res.dataUrl });
+      pendingImages.push({ dataUrl: res.dataUrl, thumbUrl: res.thumbUrl });
       editorDirty = true;
       renderEditorImages();
       next();
@@ -820,8 +830,22 @@ function compressImage(file){
           ctx.fillRect(0, 0, nw, nh);
           ctx.drawImage(img, 0, 0, nw, nh);
           var dataUrl = c.toDataURL('image/jpeg', 0.82);
+          var thumbUrl = '';
+          if (nw > 400 || nh > 400) {
+            var tscale = Math.min(1, 400 / Math.max(nw, nh));
+            var tnw = Math.max(1, Math.round(nw * tscale));
+            var tnh = Math.max(1, Math.round(nh * tscale));
+            var tc = document.createElement('canvas');
+            tc.width = tnw; tc.height = tnh;
+            var tctx = tc.getContext('2d');
+            tctx.fillStyle = '#FFFFFF';
+            tctx.fillRect(0, 0, tnw, tnh);
+            tctx.drawImage(c, 0, 0, tnw, tnh);
+            thumbUrl = tc.toDataURL('image/jpeg', 0.6);
+            tc.width = 0; tc.height = 0;
+          }
           c.width = 0; c.height = 0;
-          resolve({ dataUrl: dataUrl, date: exifDate, time: exifTime });
+          resolve({ dataUrl: dataUrl, thumbUrl: thumbUrl, date: exifDate, time: exifTime });
         } catch (e) { reject(e); }
       };
       img.src = reader.result;
@@ -855,11 +879,20 @@ function saveEntry(){
     var name = id + '_' + pad2(idx++) + '.jpg';
     var b64 = pendingImages[i].dataUrl.split(',')[1] || '';
     if (b64) { try { window.Android.saveImage(name, b64); } catch(e) {} }
+    var tb = pendingImages[i].thumbUrl || '';
+    if (tb) {
+      var tname = name.replace(/(\.\w{1,5})$/, '_t$1');
+      var tb64 = tb.split(',')[1] || '';
+      if (tb64) { try { window.Android.saveImage(tname, tb64); } catch(e) {} }
+    }
     names.push(name);
   }
   pendingImages = [];
   var removed = originalImages.filter(function(n){ return names.indexOf(n) < 0; });
-  removed.forEach(function(n){ try { window.Android.deleteImage(n); } catch(e) {} });
+  removed.forEach(function(n){
+    try { window.Android.deleteImage(n); } catch(e) {}
+    try { window.Android.deleteImage(n.replace(/(\.\w{1,5})$/, '_t$1')); } catch(e) {}
+  });
   var created = Date.now();
   var json = JSON.stringify({ id: id, date: d, time: time, text: el('edText').value, images: names, created: created });
   var ok = false;
@@ -868,14 +901,42 @@ function saveEntry(){
   editingTime = time;
   editingImages = names;
   editorDirty = false;
-  if (ok) { toast('已保存'); closeEditor(); reload(); }
+  if (ok) {
+    toast('已保存');
+    closeEditor();
+    var e2 = { id: id, date: d, time: time, text: el('edText').value, images: names.slice(), created: created };
+    var ix = -1;
+    for (var k = 0; k < entries.length; k++) if (entries[k].id === id) { ix = k; break; }
+    if (ix >= 0) entries[ix] = e2; else entries.push(e2);
+    sortEntries();
+    render();
+    updateFooter();
+    if (!orderSorted()) reload();
+  }
   else toast('保存失败');
+}
+function sortEntries(){
+  entries.sort(function(a, b){
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return (a.created || 0) - (b.created || 0);
+  });
+}
+function orderSorted(){
+  for (var i = 1; i < entries.length; i++) {
+    var p = entries[i - 1], c = entries[i];
+    if (p.date < c.date) return false;
+    if (p.date === c.date && (p.created || 0) > (c.created || 0)) return false;
+  }
+  return true;
 }
 function deleteEntryById(id){
   var en = entries.find(function(x){ return x.id === id; });
   if (!en) return;
   if (!confirm('确定删除这条日记？其图片也会一并删除。')) return;
-  en.images.forEach(function(n){ try { window.Android.deleteImage(n); } catch(e) {} });
+  en.images.forEach(function(n){
+    try { window.Android.deleteImage(n); } catch(e) {}
+    try { window.Android.deleteImage(n.replace(/(\.\w{1,5})$/, '_t$1')); } catch(e) {}
+  });
   try { window.Android.deleteEntry(id); } catch(e) {}
   toast('已删除');
   reload();
@@ -885,7 +946,10 @@ function deleteDay(date){
   if (!list.length) return;
   if (!confirm('确定删除 ' + date + ' 的全部日记（共 ' + list.length + ' 条）？')) return;
   list.forEach(function(en){
-    en.images.forEach(function(n){ try { window.Android.deleteImage(n); } catch(e) {} });
+    en.images.forEach(function(n){
+      try { window.Android.deleteImage(n); } catch(e) {}
+      try { window.Android.deleteImage(n.replace(/(\.\w{1,5})$/, '_t$1')); } catch(e) {}
+    });
     try { window.Android.deleteEntry(en.id); } catch(e) {}
   });
   toast('已删除');
