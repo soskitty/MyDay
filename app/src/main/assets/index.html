@@ -77,6 +77,35 @@ main{max-width:700px;margin:0 auto;padding:8px 14px 110px}
 .rowtxt{flex:1;font-size:14px;color:var(--ink);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all;min-width:0}
 .dayadd{width:100%;margin-top:8px;padding:10px;border:1.5px dashed var(--line);border-radius:12px;background:transparent;color:var(--muted);font-size:14px;cursor:pointer}
 .dayadd:active{background:var(--accent-soft)}
+.daygrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;padding:10px 12px 12px}
+.dcell{background:var(--bg-soft);border-radius:14px;padding:10px;cursor:pointer}
+.dcell:active{background:var(--accent-soft)}
+.dcell.open{grid-column:1 / -1}
+.dcellhead{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.dcelltitle{font-weight:700;font-size:15px}
+.dcellmeta{font-size:12px;color:var(--muted);margin-left:auto;white-space:nowrap}
+.dcell .gchev{font-size:12px;margin-left:2px}
+.dcellimgs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.dcellimgs img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:7px;display:block;background:var(--accent-soft)}
+.dcellsum{font-size:12.5px;color:var(--muted);margin-top:8px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all}
+.dcellbody{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px}
+.drow{padding:4px 0 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.drow:last-child{border-bottom:none;padding-bottom:2px}
+.drow:active{background:var(--accent-soft)}
+.drowtext{font-size:14px;line-height:1.7;overflow-wrap:break-word}
+.drowimgs{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.drowimgs img{width:72px;height:72px;object-fit:cover;border-radius:8px;display:block;background:var(--accent-soft)}
+.drowempty{font-size:13px;color:var(--muted)}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;padding:10px 12px 12px}
+.mcell{background:var(--bg-soft);border-radius:14px;padding:12px;cursor:pointer}
+.mcell:active{background:var(--accent-soft)}
+.mcellhead{display:flex;align-items:center;gap:6px;margin-bottom:10px}
+.mcelltitle{font-weight:800;font-size:17px}
+.mcellmeta{font-size:12.5px;color:var(--muted);margin-left:auto;white-space:nowrap}
+.mcell .gchev{font-size:12px;margin-left:2px}
+.mcellimgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:5px}
+.mcellimgs img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:7px;display:block;background:var(--accent-soft)}
+.mcellbody{margin-top:12px;border-top:1px dashed var(--line);padding-top:2px}
 .card{background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);cursor:pointer;position:relative;transition:transform .1s}
 .card:active{transform:scale(.97)}
 .cardimg{height:120px;overflow:hidden;background:var(--accent-soft)}
@@ -265,10 +294,13 @@ function groupByDate(){
   var m = new Map();
   for (var i = 0; i < entries.length; i++) {
     var e = entries[i];
-    if (!m.has(e.date)) m.set(e.date, { date: e.date, list: [], imgs: [] });
+    if (!m.has(e.date)) m.set(e.date, { date: e.date, list: [], imgs: [], allImgs: [] });
     var g = m.get(e.date);
     g.list.push(e);
-    for (var j = 0; j < e.images.length; j++) { if (g.imgs.length < 3) g.imgs.push(e.images[j]); }
+    for (var j = 0; j < e.images.length; j++) {
+      if (g.imgs.length < 3) g.imgs.push(e.images[j]);
+      g.allImgs.push(e.images[j]);
+    }
   }
   var arr = Array.from(m.values());
   arr.sort(function(a, b){ return a.date < b.date ? 1 : -1; });
@@ -376,10 +408,11 @@ function groupMonths(){
   for (var i = 0; i < days.length; i++) {
     var g = days[i];
     var key = g.date.slice(0, 7);
-    if (!m.has(key)) m.set(key, { key: key, days: [], imgs: [] });
+    if (!m.has(key)) m.set(key, { key: key, days: [], imgs: [], allImgs: [] });
     var grp = m.get(key);
     grp.days.push(g);
     for (var j = 0; j < g.imgs.length; j++) { if (grp.imgs.length < 3) grp.imgs.push(g.imgs[j]); }
+    for (var k = 0; k < g.allImgs.length; k++) grp.allImgs.push(g.allImgs[k]);
   }
   var arr = Array.from(m.values()).sort(function(a, b){ return a.key < b.key ? 1 : -1; });
   for (var k = 0; k < arr.length; k++) {
@@ -429,6 +462,55 @@ function grpHtml(g, hkey, open, label){
     '<span class="gchev">' + (open ? '▾' : '▸') + '</span>' +
   '</button>';
 }
+function dayGridRowHtml(en){
+  var ths = '';
+  for (var i = 0; i < en.images.length; i++) ths += thumbImgTag(en.images[i], 'drowimg', '');
+  var hasText = !!en.text;
+  return '<div class="drow" onclick="openViewer(\'' + en.id + '\')">' +
+    (hasText ? '<div class="drowtext">' + escapeHtml(en.text).replace(/\n/g, '<br>') + '</div>' : '') +
+    (ths ? '<div class="drowimgs">' + ths + '</div>' : '') +
+    (!hasText && !en.images.length ? '<div class="drowempty">（空日记）</div>' : '') +
+  '</div>';
+}
+function dayCellHtml(g){
+  var key = 'd_' + g.date;
+  var open = expanded.has(key);
+  var thumbs = '';
+  for (var i = 0; i < g.allImgs.length; i++) thumbs += thumbImgTag(g.allImgs[i], 'dcellimg', '');
+  var first = g.list[0];
+  var html = '<div class="dcell' + (open ? ' open' : '') + '" onclick="toggleKey(\'' + key + '\')">' +
+    '<div class="dcellhead">' +
+      '<span class="dcelltitle">' + formatDayLabel(g.date) + '</span>' +
+      '<span class="dcellmeta">' + g.date.slice(5) + ' · ' + g.list.length + ' 篇' + (g.allImgs.length ? ' · ' + g.allImgs.length + ' 图' : '') + '</span>' +
+      '<span class="gchev">' + (open ? '▾' : '▸') + '</span>' +
+    '</div>' +
+    (thumbs ? '<div class="dcellimgs">' + thumbs + '</div>' : '') +
+    (first.text ? '<div class="dcellsum">' + escapeHtml(summaryLines(first.text)) + '</div>' : '');
+  if (open) {
+    html += '<div class="dcellbody">';
+    for (var j = 0; j < g.list.length; j++) html += dayGridRowHtml(g.list[j]);
+    html += '</div>';
+  }
+  return html + '</div>';
+}
+function dayGridHtml(days){
+  var html = '<div class="daygrid">';
+  for (var i = 0; i < days.length; i++) html += dayCellHtml(days[i]);
+  return html + '</div>';
+}
+function monthCellHtml(mm, mkey, mopen){
+  var thumbs = '';
+  for (var i = 0; i < mm.allImgs.length; i++) thumbs += thumbImgTag(mm.allImgs[i], 'mcellimg', '');
+  return '<div class="mcell" onclick="toggleKey(\'' + mkey + '\')">' +
+    '<div class="mcellhead">' +
+      '<span class="mcelltitle">' + mm.label + '</span>' +
+      '<span class="mcellmeta">' + mm.dayCount + ' 天 · ' + mm.entryCount + ' 篇 · ' + mm.imgCount + ' 图</span>' +
+      '<span class="gchev">' + (mopen ? '▾' : '▸') + '</span>' +
+    '</div>' +
+    (thumbs ? '<div class="mcellimgs">' + thumbs + '</div>' : '') +
+    (mopen ? '<div class="mcellbody">' + dayGridHtml(mm.days) + '</div>' : '') +
+  '</div>';
+}
 function renderMonth(){
   var main = el('list');
   if (!entries.length) { main.innerHTML = emptyHtml(); return; }
@@ -439,7 +521,7 @@ function renderMonth(){
     var hkey = 'm_' + g.key;
     var open = expanded.has(hkey);
     html += '<section class="grp">' + grpHtml(g, hkey, open, g.label);
-    if (open) html += '<div class="grpbody" style="padding-top:0">' + streamHtml(g.days) + '</div>';
+    if (open) html += dayGridHtml(g.days);
     html += '</section>';
   }
   main.innerHTML = html;
@@ -455,16 +537,11 @@ function renderYear(){
     var yopen = expanded.has(ykey);
     html += '<section class="grp">' + grpHtml(y, ykey, yopen, y.label);
     if (yopen) {
-      html += '<div class="grpbody" style="padding-top:0">';
+      html += '<div class="mgrid">';
       for (var j = 0; j < y.months.length; j++) {
         var mm = y.months[j];
         var mkey = 'm_' + mm.key;
-        var mopen = expanded.has(mkey);
-        html += '<button class="grpsub" onclick="toggleKey(\'' + mkey + '\')">' +
-          '<span class="gtitle">' + mm.label + '</span>' +
-          '<span class="gsub">' + mm.entryCount + ' 篇 · ' + mm.imgCount + ' 图</span>' +
-          '<span class="gchev">' + (mopen ? '▾' : '▸') + '</span></button>';
-        if (mopen) html += '<div class="grpmbody">' + streamHtml(mm.days) + '</div>';
+        html += monthCellHtml(mm, mkey, expanded.has(mkey));
       }
       html += '</div>';
     }
