@@ -187,6 +187,7 @@ var editingImages = [];
 var pendingImages = [];
 var editorDirty = false;
 var dateAutoSet = false;
+var autoDateDone = false;
 var lbLast = 0;
 
 function pad(n){ return n < 10 ? '0' + n : '' + n; }
@@ -543,6 +544,7 @@ function openNewEntry(date){
   editingId = null;
   editingTime = '';
   dateAutoSet = false;
+  autoDateDone = false;
   editingImages = [];
   pendingImages = [];
   el('edDate').value = date || todayStr();
@@ -609,15 +611,20 @@ function pickImages(){
 function onPickFiles(files){
   var list = Array.prototype.slice.call(files || []);
   if (!list.length) return;
-  var isFirst = pendingImages.length === 0;
+  var warned = false;
   var i = 0;
   function next(){
     if (i >= list.length) return;
     var f = list[i]; i++;
     compressImage(f).then(function(res){
-      if (isFirst && !dateAutoSet && !editingId && res.date) {
-        applyEditorDate(res.date);
-        isFirst = false;
+      if (!dateAutoSet && !editingId && !autoDateDone) {
+        if (res.date) {
+          applyEditorDate(res.date);
+          autoDateDone = true;
+        } else if (!warned) {
+          warned = true;
+          toast('图片没有日期信息，日期保持原样');
+        }
       }
       pendingImages.push({ dataUrl: res.dataUrl });
       editorDirty = true;
