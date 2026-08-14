@@ -245,8 +245,8 @@ class MainActivity : ComponentActivity() {
 
         @JavascriptInterface
         fun getStats(): String = try {
-            val files = entriesDir.listFiles()?.filter { it.name.endsWith(".json") } ?: emptyArray()
-            val imgs = imagesDir.listFiles()?.filter { it.isFile } ?: emptyArray()
+            val files = (entriesDir.listFiles() ?: emptyArray()).filter { it.name.endsWith(".json") }
+            val imgs = (imagesDir.listFiles() ?: emptyArray()).filter { it.isFile }
             val bytes = files.sumOf { it.length() } + imgs.sumOf { it.length() }
             "{\"entries\":${files.size},\"images\":${imgs.size},\"bytes\":$bytes}"
         } catch (e: Exception) {
