@@ -45,6 +45,21 @@ main{max-width:700px;margin:0 auto;padding:8px 14px 110px}
 .dimgs{display:grid;grid-template-columns:1fr;gap:10px}
 .timg{width:100%;height:auto;border-radius:12px;display:block;background:var(--accent-soft)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:12px;padding-top:10px}
+.grp{margin:0 0 14px;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.grphead{display:flex;align-items:center;gap:10px;width:100%;padding:12px 14px;background:transparent;border:none;cursor:pointer;color:var(--ink);text-align:left}
+.grphead:active{background:var(--accent-soft)}
+.gthumbs{display:flex;gap:4px;flex:0 0 auto}
+.gthumb{width:34px;height:34px;border-radius:8px;overflow:hidden;background:var(--accent-soft)}
+.gthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.gtitle{font-size:16px;font-weight:700;white-space:nowrap}
+.gsub{font-size:12.5px;color:var(--muted);margin-left:auto;white-space:nowrap;flex:0 0 auto}
+.gchev{color:var(--muted);font-size:13px;width:14px;text-align:center;flex:0 0 auto}
+.grpbody{border-top:1px solid var(--line);padding:2px 10px 12px}
+.grpbody .grid{margin-top:4px;padding-top:4px}
+.grpsub{display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:none;background:transparent;cursor:pointer;color:var(--ink);text-align:left;border-top:1px solid var(--line)}
+.grpsub:active{background:var(--accent-soft)}
+.grpmbody{border-top:1px solid var(--line);padding:2px 10px 12px}
+.grpmbody .grid{margin-top:4px;padding-top:4px}
 .card{background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);cursor:pointer;position:relative;transition:transform .1s}
 .card:active{transform:scale(.97)}
 .cardimg{height:120px;overflow:hidden;background:var(--accent-soft)}
@@ -97,8 +112,8 @@ main{max-width:700px;margin:0 auto;padding:8px 14px 110px}
 <body>
 <header>
   <div class="brand"><span class="dot"></span>MyDay</div>
-  <button class="icobtn" id="btnToggle" onclick="toggleView()" title="切换视图">▦</button>
-  <button class="icobtn needapp" id="btnNew" onclick="openEditor()" title="写日记">＋</button>
+  <button class="icobtn" id="btnToggle" onclick="viewMenu()" title="切换视图">▦</button>
+  <button class="icobtn needapp" id="btnNew" onclick="newEntry()" title="写日记">＋</button>
   <button class="icobtn" id="btnMenu" onclick="menuMenu()" title="菜单">⋯</button>
 </header>
 
@@ -135,10 +150,13 @@ function el(id){ return document.getElementById(id); }
 
 var entries = [];
 var view = 'timeline';
+var expanded = new Set();
 var theme = 'light';
 var editingImages = [];
 var pendingImages = [];
 var editorDirty = false;
+var dateAutoSet = false;
+var blankNew = false;
 var lbLast = 0;
 
 function pad(n){ return n < 10 ? '0' + n : '' + n; }
@@ -216,27 +234,166 @@ function renderTimeline(){
   main.innerHTML = html;
 }
 
-function renderCatalog(){
+function cardHtml(e){
+  var first = e.images[0];
+  return '<div class="card" onclick="openEditor(\'' + e.date + '\')">' +
+    '<button class="del needapp" onclick="event.stopPropagation();deleteEntry(\'' + e.date + '\')">✕</button>' +
+    (first ? '<div class="cardimg"><img src="' + imgSrc(first) + '" alt="" loading="lazy"></div>'
+           : '<div class="cardimg cardph"><span>' + formatDayLabel(e.date) + '</span></div>') +
+    '<div class="cardbody">' +
+      '<div class="carddate">' + formatDayLabel(e.date) + ' · ' + weekdayCn(parseDate(e.date)) + '</div>' +
+      '<div class="cardtext">' + (e.text ? escapeHtml(summaryLines(e.text)) : '（无文字）') + '</div>' +
+    '</div></div>';
+}
+function dayGridHtml(dayList){
+  var html = '<div class="grid">';
+  for (var i = 0; i < dayList.length; i++) html += cardHtml(dayList[i]);
+  return html + '</div>';
+}
+function renderDay(){
   var main = el('list');
   if (!entries.length) { main.innerHTML = emptyHtml(); return; }
-  var html = '<div class="grid">';
+  main.innerHTML = dayGridHtml(entries);
+}
+function groupMonths(){
+  var m = new Map();
   for (var i = 0; i < entries.length; i++) {
     var e = entries[i];
-    var first = e.images[0];
-    html += '<div class="card" onclick="openEditor(\'' + e.date + '\')">' +
-      '<button class="del needapp" onclick="event.stopPropagation();deleteEntry(\'' + e.date + '\')">✕</button>' +
-      (first ? '<div class="cardimg"><img src="' + imgSrc(first) + '" alt="" loading="lazy"></div>'
-             : '<div class="cardimg cardph"><span>' + formatDayLabel(e.date) + '</span></div>') +
-      '<div class="cardbody">' +
-        '<div class="carddate">' + formatDayLabel(e.date) + ' · ' + weekdayCn(parseDate(e.date)) + '</div>' +
-        '<div class="cardtext">' + (e.text ? escapeHtml(summaryLines(e.text)) : '（无文字）') + '</div>' +
-      '</div></div>';
+    var key = e.date.slice(0, 7);
+    if (!m.has(key)) m.set(key, { key: key, days: [], imgs: [] });
+    var g = m.get(key);
+    g.days.push(e);
+    for (var j = 0; j < e.images.length; j++) { if (g.imgs.length < 3) g.imgs.push(e.images[j]); }
   }
-  html += '</div>';
+  var arr = Array.from(m.values()).sort(function(a, b){ return a.key < b.key ? 1 : -1; });
+  for (var k = 0; k < arr.length; k++) {
+    var gg = arr[k];
+    gg.label = monthLabel(gg.key);
+    gg.dayCount = gg.days.length;
+    gg.imgCount = gg.days.reduce(function(s, d){ return s + d.images.length; }, 0);
+  }
+  return arr;
+}
+function monthLabel(key){
+  var p = key.split('-');
+  return p[0] + ' 年 ' + (+p[1]) + ' 月';
+}
+function groupYears(){
+  var m = new Map();
+  for (var i = 0; i < entries.length; i++) {
+    var e = entries[i];
+    var key = e.date.slice(0, 4);
+    if (!m.has(key)) m.set(key, { key: key, months: [] });
+    var y = m.get(key);
+    var mk = e.date.slice(0, 7);
+    var mg = null;
+    for (var j = 0; j < y.months.length; j++) { if (y.months[j].key === mk) { mg = y.months[j]; break; } }
+    if (!mg) { mg = { key: mk, days: [], imgs: [] }; y.months.push(mg); }
+    mg.days.push(e);
+    for (var n = 0; n < e.images.length; n++) { if (mg.imgs.length < 3) mg.imgs.push(e.images[n]); }
+  }
+  var arr = Array.from(m.values()).sort(function(a, b){ return a.key < b.key ? 1 : -1; });
+  for (var k = 0; k < arr.length; k++) {
+    var y = arr[k];
+    y.label = y.key + ' 年';
+    y.months.sort(function(a, b){ return a.key < b.key ? 1 : -1; });
+    y.imgs = [];
+    for (var t = 0; t < y.months.length; t++) {
+      var mm = y.months[t];
+      mm.label = monthLabel(mm.key);
+      mm.imgCount = mm.days.reduce(function(s, d){ return s + d.images.length; }, 0);
+      for (var u = 0; u < mm.imgs.length; u++) { if (y.imgs.length < 3) y.imgs.push(mm.imgs[u]); }
+    }
+    y.dayCount = y.months.reduce(function(s, mm){ return s + mm.days.length; }, 0);
+    y.imgCount = y.months.reduce(function(s, mm){ return s + mm.imgCount; }, 0);
+  }
+  return arr;
+}
+function grpHtml(g, hkey, open, label){
+  var thumbs = '';
+  for (var i = 0; i < g.imgs.length; i++) {
+    thumbs += '<span class="gthumb"><img src="' + imgSrc(g.imgs[i]) + '" alt="" loading="lazy"></span>';
+  }
+  return '<button class="grphead" onclick="toggleKey(\'' + hkey + '\')">' +
+    (thumbs ? '<span class="gthumbs">' + thumbs + '</span>' : '') +
+    '<span class="gtitle">' + label + '</span>' +
+    '<span class="gsub">' + g.dayCount + ' 篇 · ' + g.imgCount + ' 图</span>' +
+    '<span class="gchev">' + (open ? '▾' : '▸') + '</span>' +
+  '</button>';
+}
+function renderMonth(){
+  var main = el('list');
+  if (!entries.length) { main.innerHTML = emptyHtml(); return; }
+  var groups = groupMonths();
+  var html = '';
+  for (var i = 0; i < groups.length; i++) {
+    var g = groups[i];
+    var hkey = 'm_' + g.key;
+    var open = expanded.has(hkey);
+    html += '<section class="grp">' + grpHtml(g, hkey, open, g.label);
+    if (open) html += '<div class="grpbody">' + dayGridHtml(g.days) + '</div>';
+    html += '</section>';
+  }
   main.innerHTML = html;
 }
+function renderYear(){
+  var main = el('list');
+  if (!entries.length) { main.innerHTML = emptyHtml(); return; }
+  var groups = groupYears();
+  var html = '';
+  for (var i = 0; i < groups.length; i++) {
+    var y = groups[i];
+    var ykey = 'y_' + y.key;
+    var yopen = expanded.has(ykey);
+    html += '<section class="grp">' + grpHtml(y, ykey, yopen, y.label);
+    if (yopen) {
+      html += '<div class="grpbody" style="padding-top:0">';
+      for (var j = 0; j < y.months.length; j++) {
+        var mm = y.months[j];
+        var mkey = 'm_' + mm.key;
+        var mopen = expanded.has(mkey);
+        html += '<button class="grpsub" onclick="toggleKey(\'' + mkey + '\')">' +
+          '<span class="gtitle">' + mm.label + '</span>' +
+          '<span class="gsub">' + mm.days.length + ' 篇 · ' + mm.imgCount + ' 图</span>' +
+          '<span class="gchev">' + (mopen ? '▾' : '▸') + '</span></button>';
+        if (mopen) html += '<div class="grpmbody">' + dayGridHtml(mm.days) + '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</section>';
+  }
+  main.innerHTML = html;
+}
+function toggleKey(key){
+  if (expanded.has(key)) expanded.delete(key); else expanded.add(key);
+  render();
+}
+function render(){
+  if (view === 'timeline') renderTimeline();
+  else if (view === 'day') renderDay();
+  else if (view === 'month') renderMonth();
+  else renderYear();
+}
 
-function render(){ if (view === 'catalog') renderCatalog(); else renderTimeline(); }
+function viewLabel(){
+  if (view === 'timeline') return '流水';
+  if (view === 'day') return '按日';
+  if (view === 'month') return '按月';
+  return '按年';
+}
+function setView(v){
+  view = v;
+  try { localStorage.setItem('myday-view', view); } catch(e) {}
+  render();
+}
+function viewMenu(){
+  showSheet([
+    { label: '流水视图', sub: '多日连续滑动浏览', fn: function(){ setView('timeline'); } },
+    { label: '目录 · 按日', sub: '每天一张卡片', fn: function(){ setView('day'); } },
+    { label: '目录 · 按月', sub: '按月份折叠浏览', fn: function(){ setView('month'); } },
+    { label: '目录 · 按年', sub: '年份 → 月份 → 按日', fn: function(){ setView('year'); } }
+  ]);
+}
 
 function updateFooter(){
   var n = entries.length, imgs = 0, i;
@@ -250,15 +407,8 @@ function updateFooter(){
 
 function updateToggleBtn(){
   var b = el('btnToggle');
-  if (view === 'catalog') { b.textContent = '≡'; b.title = '切换为流水视图'; }
-  else { b.textContent = '▦'; b.title = '切换为目录视图'; }
-}
-
-function toggleView(){
-  view = (view === 'timeline') ? 'catalog' : 'timeline';
-  try { localStorage.setItem('myday-view', view); } catch(e) {}
-  updateToggleBtn();
-  render();
+  b.textContent = '▦';
+  b.title = '切换视图（当前：' + viewLabel() + '）';
 }
 
 function toggleTheme(){
@@ -280,15 +430,54 @@ function initTheme(){
 function openEditor(date){
   if (!IS_APP) return;
   var d = date || todayStr();
-  var ex = entries.find(function(x){ return x.date === d; });
-  editingImages = ex ? (ex.images || []).slice() : [];
+  dateAutoSet = false;
+  blankNew = false;
+  editingImages = [];
   pendingImages = [];
   el('edDate').value = d;
-  el('edText').value = ex ? ex.text : '';
+  el('edText').value = '';
+  editorDirty = false;
+  var ex = entries.find(function(x){ return x.date === d; });
+  if (ex) { editingImages = (ex.images || []).slice(); el('edText').value = ex.text; }
+  renderEditorImages();
+  el('editor').classList.add('open');
+  setTimeout(function(){ el('edText').focus(); }, 120);
+}
+function newEntry(){
+  if (!IS_APP) return;
+  var today = todayStr();
+  var ex = entries.find(function(x){ return x.date === today; });
+  if (ex) {
+    showSheet([
+      { label: '继续编辑今天的日记', sub: '打开今天已有的内容', fn: function(){ openEditor(today); } },
+      { label: '新建空白日记', sub: '今天将新建，保存会覆盖今天的原内容', danger: true, fn: function(){ openBlankEditor(today); } }
+    ]);
+  } else {
+    openBlankEditor(today);
+  }
+}
+function openBlankEditor(d){
+  dateAutoSet = false;
+  blankNew = true;
+  editingImages = [];
+  pendingImages = [];
+  el('edDate').value = d;
+  el('edText').value = '';
   editorDirty = false;
   renderEditorImages();
   el('editor').classList.add('open');
   setTimeout(function(){ el('edText').focus(); }, 120);
+}
+function applyEditorDate(d){
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+  blankNew = false;
+  el('edDate').value = d;
+  var ex = entries.find(function(x){ return x.date === d; });
+  editingImages = ex ? (ex.images || []).slice() : [];
+  pendingImages = [];
+  el('edText').value = ex ? ex.text : '';
+  renderEditorImages();
+  editorDirty = true;
 }
 function closeEditor(){
   if (editorDirty && !confirm('有未保存的修改，确定放弃？')) return false;
@@ -327,12 +516,17 @@ function pickImages(){
 function onPickFiles(files){
   var list = Array.prototype.slice.call(files || []);
   if (!list.length) return;
+  var isFirst = pendingImages.length === 0;
   var i = 0;
   function next(){
     if (i >= list.length) return;
     var f = list[i]; i++;
-    compressImage(f).then(function(dataUrl){
-      pendingImages.push({ dataUrl: dataUrl });
+    compressImage(f).then(function(res){
+      if (isFirst && !dateAutoSet && res.date) {
+        applyEditorDate(res.date);
+        isFirst = false;
+      }
+      pendingImages.push({ dataUrl: res.dataUrl });
       editorDirty = true;
       renderEditorImages();
       next();
@@ -343,11 +537,115 @@ function onPickFiles(files){
   }
   next();
 }
+function padYear(n){ return n < 10 ? '0' + n : '' + n; }
+function normExifDate(s){
+  var m = /(\d{4})[:.-](\d{1,2})[:.-](\d{1,2})/.exec(s || '');
+  if (!m) return null;
+  var y = parseInt(m[1], 10), mo = parseInt(m[2], 10), d = parseInt(m[3], 10);
+  if (y >= 2000 && y <= 2100 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return y + '-' + padYear(mo) + '-' + padYear(d);
+  return null;
+}
+function dateFromFilename(name){
+  if (!name) return null;
+  var base = String(name).replace(/.*[\\/]/, '').replace(/\.\w{1,5}$/, '');
+  var m = /(20\d{2})[-_.]?(\d{2})[-_.]?(\d{2})/.exec(base);
+  if (!m) return null;
+  var y = parseInt(m[1], 10), mo = parseInt(m[2], 10), d = parseInt(m[3], 10);
+  if (y >= 2000 && y <= 2100 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return y + '-' + padYear(mo) + '-' + padYear(d);
+  return null;
+}
+function parseExifDate(bytes){
+  var len = bytes.length;
+  if (len < 20) return null;
+  var i = 2, guard = 0;
+  while (i < len - 8 && guard++ < 2000) {
+    if (bytes[i] === 0xFF && bytes[i + 1] === 0xE1) {
+      var segLen = ((bytes[i + 2] & 0xFF) << 8) | (bytes[i + 3] & 0xFF);
+      if (segLen >= 10 && i + 2 + segLen <= len &&
+          bytes[i + 4] === 0x45 && bytes[i + 5] === 0x78 && bytes[i + 6] === 0x69 &&
+          bytes[i + 7] === 0x66 && bytes[i + 8] === 0x00 && bytes[i + 9] === 0x00) {
+        return parseTiffExif(bytes, i + 10, i + 2 + segLen);
+      }
+      i += 2 + segLen;
+    } else if (bytes[i] === 0xFF && bytes[i + 1] === 0xD8) {
+      i += 2;
+    } else if (bytes[i] === 0xFF && bytes[i + 1] >= 0xD0 && bytes[i + 1] <= 0xD7) {
+      i += 2;
+    } else if (bytes[i] === 0xFF && bytes[i + 1] === 0xFF) {
+      i += 1;
+    } else if (bytes[i] === 0xFF) {
+      var l = ((bytes[i + 2] & 0xFF) << 8) | (bytes[i + 3] & 0xFF);
+      i += 2 + l;
+    } else {
+      i += 1;
+    }
+  }
+  return null;
+}
+function parseTiffExif(bytes, start, end){
+  if (end - start < 8) return null;
+  var little = (bytes[start] === 0x49);
+  if (bytes[start] !== 0x49 && bytes[start] !== 0x4D) return null;
+  function u16(o){ return little ? ((bytes[o] & 0xFF) | ((bytes[o + 1] & 0xFF) << 8)) : (((bytes[o] & 0xFF) << 8) | (bytes[o + 1] & 0xFF)); }
+  function u32(o){
+    if (little) return (bytes[o] & 0xFF) | ((bytes[o + 1] & 0xFF) << 8) | ((bytes[o + 2] & 0xFF) << 16) | ((bytes[o + 3] & 0xFF) << 24);
+    return ((bytes[o] & 0xFF) << 24) | ((bytes[o + 1] & 0xFF) << 16) | ((bytes[o + 2] & 0xFF) << 8) | (bytes[o + 3] & 0xFF);
+  }
+  if (u16(start + 2) !== 42) return null;
+  function readAscii(entry, count){
+    var base = (count <= 4) ? (entry + 8) : (start + u32(entry + 8));
+    if (base < start || base + count > end) return '';
+    var s = '';
+    for (var k = 0; k < count; k++) s += String.fromCharCode(bytes[base + k]);
+    return s;
+  }
+  var ifd0 = start + u32(start + 4);
+  if (ifd0 < start || ifd0 + 2 > end) return null;
+  var n = u16(ifd0);
+  var exifPtr = -1;
+  for (var e = 0; e < n; e++) {
+    var entry = ifd0 + 2 + e * 12;
+    if (entry + 12 > end) break;
+    var tag = u16(entry), type = u16(entry + 2), count = u32(entry + 4);
+    if (tag === 0x0132 && type === 2) {
+      var dt = normExifDate(readAscii(entry, count));
+      if (dt) return dt;
+    }
+    if (tag === 0x8769 && type === 4 && count === 1) exifPtr = u32(entry + 8);
+  }
+  if (exifPtr >= 0) {
+    var exifIfd = start + exifPtr;
+    if (exifIfd >= start && exifIfd + 2 <= end) {
+      var m = u16(exifIfd);
+      for (var k = 0; k < m; k++) {
+        var en = exifIfd + 2 + k * 12;
+        if (en + 12 > end) break;
+        var tg = u16(en), ty = u16(en + 2), ct = u32(en + 4);
+        if (tg === 0x9003 && ty === 2) {
+          var v = normExifDate(readAscii(en, ct));
+          if (v) return v;
+        }
+      }
+    }
+  }
+  return null;
+}
+function parseExifDateFromDataUrl(dataUrl){
+  var m = /^data:image\/(?:jpeg|jpg);base64,/.exec(dataUrl);
+  if (!m) return null;
+  try {
+    var bin = atob(dataUrl.split(',')[1]);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return parseExifDate(bytes);
+  } catch (e) { return null; }
+}
 function compressImage(file){
   return new Promise(function(resolve, reject){
     var reader = new FileReader();
     reader.onerror = function(){ reject(new Error('read')); };
     reader.onload = function(){
+      var exifDate = parseExifDateFromDataUrl(reader.result) || dateFromFilename(file.name);
       var img = new Image();
       img.onerror = function(){ reject(new Error('decode')); };
       img.onload = function(){
@@ -365,7 +663,7 @@ function compressImage(file){
           ctx.drawImage(img, 0, 0, nw, nh);
           var dataUrl = c.toDataURL('image/jpeg', 0.82);
           c.width = 0; c.height = 0;
-          resolve(dataUrl);
+          resolve({ dataUrl: dataUrl, date: exifDate });
         } catch (e) { reject(e); }
       };
       img.src = reader.result;
@@ -385,6 +683,10 @@ function saveEntry(){
   if (!IS_APP) return;
   var d = el('edDate').value;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { toast('日期格式错误'); return; }
+  if (blankNew && entries.find(function(x){ return x.date === d; })) {
+    if (!confirm('「' + d + '」已有一篇日记，保存将覆盖原内容。继续？')) return;
+  }
+  blankNew = false;
   var originalImages = editingImages.slice();
   var names = editingImages.slice();
   var idx = nextNum(d, names) + 1;
@@ -512,21 +814,15 @@ el('fileInput').addEventListener('change', function(ev){
 });
 el('edText').addEventListener('input', function(){ editorDirty = true; });
 el('edDate').addEventListener('change', function(){
-  var d = el('edDate').value;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
-  var ex = entries.find(function(x){ return x.date === d; });
-  editingImages = ex ? (ex.images || []).slice() : [];
-  pendingImages = [];
-  el('edText').value = ex ? ex.text : '';
-  renderEditorImages();
-  editorDirty = true;
+  dateAutoSet = true;
+  applyEditorDate(el('edDate').value);
 });
 el('sheet').addEventListener('click', sheetBlank);
 
 initTheme();
 var savedView = null;
 try { savedView = localStorage.getItem('myday-view'); } catch(e) {}
-if (savedView === 'catalog' || savedView === 'timeline') view = savedView;
+if (savedView === 'timeline' || savedView === 'day' || savedView === 'month' || savedView === 'year') view = savedView;
 if (!IS_APP) document.body.classList.add('browser');
 updateToggleBtn();
 loadEntries();

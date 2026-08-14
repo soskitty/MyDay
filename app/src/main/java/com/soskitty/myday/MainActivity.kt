@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.os.Build
+import android.provider.OpenableColumns
 import android.util.Base64
 import android.util.Log
 import android.view.View
@@ -67,7 +68,7 @@ class MainActivity : ComponentActivity() {
             val pickDir = File(cacheDir, "pick").apply { mkdirs() }
             uris.forEachIndexed { i, u ->
                 try {
-                    val f = File(pickDir, "pick_${System.currentTimeMillis()}_$i${guessExtension(u)}")
+                    val f = File(pickDir, "pick_${System.currentTimeMillis()}_$i" + "_" + displayName(u))
                     contentResolver.openInputStream(u)?.use { ins ->
                         f.outputStream().use { outs -> ins.copyTo(outs) }
                     }
@@ -447,6 +448,18 @@ class MainActivity : ComponentActivity() {
         "image/webp" -> ".webp"
         "image/gif" -> ".gif"
         else -> ".jpg"
+    }
+
+    private fun displayName(u: Uri): String {
+        var name = "img.jpg"
+        try {
+            contentResolver.query(u, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) c.getString(0)?.let { if (it.isNotBlank()) name = it }
+            }
+        } catch (e: Exception) {
+            name = "img" + guessExtension(u)
+        }
+        return name.replace(Regex("""[\\/:*?"<>|]"""), "_")
     }
 
     private fun toast(msg: String) {
