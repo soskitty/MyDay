@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>MyDay</title>
+<style>
+:root{
+  --bg:#F6F3EB; --card:#FFFFFF; --ink:#292420; --muted:#8A8174; --line:rgba(30,20,0,.10);
+  --accent:#D97706; --accent-soft:#F4E3C8; --danger:#C0392B;
+  --radius:16px; --shadow:0 1px 3px rgba(60,40,10,.06),0 4px 14px rgba(60,40,10,.05);
+}
+[data-theme="dark"]{
+  --bg:#14110C; --card:#201B13; --ink:#EDE5D6; --muted:#9A8F7C; --line:rgba(255,255,255,.09);
+  --accent:#F5A623; --accent-soft:#3A2E17; --danger:#E06B5A;
+  --shadow:0 1px 3px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+  font-size:16px; line-height:1.7; -webkit-text-size-adjust:100%;
+  transition:background .25s,color .25s;
+}
+header{
+  position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:6px;
+  padding:10px 12px;background:color-mix(in srgb,var(--bg) 86%,transparent);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--line);
+}
+.brand{font-weight:800;font-size:19px;letter-spacing:.5px;display:flex;align-items:center;gap:8px;flex:1;white-space:nowrap}
+.brand .dot{width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.icobtn{width:38px;height:38px;min-width:38px;border:none;border-radius:12px;background:transparent;color:var(--ink);
+  font-size:19px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background .15s}
+.icobtn:active{background:var(--accent-soft)}
+main{max-width:700px;margin:0 auto;padding:8px 14px 110px}
+.day{margin:30px 0}
+.day:first-child{margin-top:14px}
+.dayhead{display:flex;align-items:center;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.dlabel{font-size:21px;font-weight:700;font-family:Georgia,"Times New Roman",serif;letter-spacing:.3px}
+.dsub{font-size:13px;color:var(--muted)}
+.spacer{flex:1}
+.dayhead .icobtn{font-size:16px;width:32px;height:32px;min-width:32px}
+.dtext{font-size:16px;overflow-wrap:break-word;margin-bottom:10px}
+.dimgs{display:grid;grid-template-columns:1fr;gap:10px}
+.timg{width:100%;height:auto;border-radius:12px;display:block;background:var(--accent-soft)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:12px;padding-top:10px}
+.card{background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);cursor:pointer;position:relative;transition:transform .1s}
+.card:active{transform:scale(.97)}
+.cardimg{height:120px;overflow:hidden;background:var(--accent-soft)}
+.cardimg img{width:100%;height:100%;object-fit:cover;display:block}
+.cardimg.cardph{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:15px;background:linear-gradient(135deg,var(--accent-soft),var(--card))}
+.cardbody{padding:10px 12px 12px}
+.carddate{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:3px}
+.cardtext{font-size:13px;color:var(--muted);line-height:1.55;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all}
+.card .del{position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,.45);color:#fff;border:none;font-size:13px;display:flex;align-items:center;justify-content:center;z-index:2}
+#editor{position:fixed;inset:0;background:var(--bg);z-index:40;display:none}
+#editor.open{display:flex;flex-direction:column}
+.edwrap{width:100%;max-width:700px;margin:0 auto;flex:1;display:flex;flex-direction:column;min-height:0}
+.edbar{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.edbar input[type=date]{flex:1;font-size:16px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);outline:none}
+.savebtn{border:none;background:var(--accent);color:#fff;font-weight:700;padding:9px 18px;border-radius:12px;font-size:15px;cursor:pointer;min-width:64px}
+#edText{flex:1;margin:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);
+  font-size:17px;line-height:1.8;resize:none;outline:none;min-height:150px}
+.imgstrip{display:flex;gap:8px;overflow-x:auto;padding:0 12px 12px;scrollbar-width:none}
+.imgstrip::-webkit-scrollbar{display:none}
+.ethumb{position:relative;flex:0 0 88px;height:88px;border-radius:10px;overflow:hidden;background:var(--accent-soft)}
+.ethumb img{width:100%;height:100%;object-fit:cover}
+.ethumb i{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-style:normal;font-size:11px;display:flex;align-items:center;justify-content:center}
+.addimg{flex:0 0 88px;height:88px;border:2px dashed var(--line);border-radius:10px;background:transparent;color:var(--muted);font-size:14px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+#sheet{position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:50;display:none;align-items:flex-end;justify-content:center}
+#sheet.open{display:flex}
+.sheetwrap{background:var(--card);width:100%;max-width:700px;border-radius:22px 22px 0 0;padding:10px 12px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -6px 30px rgba(0,0,0,.2)}
+.sheetbtn{display:block;width:100%;text-align:left;padding:13px 12px;border:none;background:transparent;border-radius:12px;cursor:pointer}
+.sheetbtn:active{background:var(--accent-soft)}
+.sheetbtn span{display:block;font-size:16px;color:var(--ink);font-weight:600}
+.sheetbtn small{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.sheetbtn.danger span{color:var(--danger)}
+#toast{position:fixed;left:50%;bottom:42px;transform:translateX(-50%) translateY(20px);background:#2A241C;color:#fff;padding:10px 18px;border-radius:999px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:90;max-width:84vw;text-align:center}
+[data-theme="dark"] #toast{background:#4A4236}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#lightbox{position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:60;display:none;align-items:center;justify-content:center}
+#lightbox.open{display:flex}
+#lightbox img{max-width:100%;max-height:100%;object-fit:contain;transition:transform .18s}
+#lightbox img.zoomed{transform:scale(2.2)}
+.empty{padding:90px 20px;text-align:center;color:var(--muted)}
+.empty .big{font-size:56px;margin-bottom:16px}
+.empty .sub{font-size:13px;margin-top:8px;color:var(--muted)}
+#footer{text-align:center;color:var(--muted);font-size:12.5px;padding:22px 0 6px}
+.browser .needapp{display:none}
+@media (max-width:360px){
+  .brand{font-size:17px}
+  .icobtn{width:34px;height:34px;min-width:34px}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot"></span>MyDay</div>
+  <button class="icobtn" id="btnToggle" onclick="toggleView()" title="切换视图">▦</button>
+  <button class="icobtn needapp" id="btnImport" onclick="importMenu()" title="导入备份">⇩</button>
+  <button class="icobtn needapp" id="btnExport" onclick="exportMenu()" title="导出备份">⇪</button>
+  <button class="icobtn needapp" id="btnNew" onclick="openEditor()" title="写日记">＋</button>
+  <button class="icobtn" id="btnMenu" onclick="menuMenu()" title="菜单">⋯</button>
+</header>
+
+<main id="list"></main>
+<div id="footer"></div>
+
+<div id="editor">
+  <div class="edwrap">
+    <div class="edbar">
+      <button class="icobtn" onclick="closeEditor()" title="返回">✕</button>
+      <input type="date" id="edDate">
+      <button class="savebtn" onclick="saveEntry()">保存</button>
+    </div>
+    <textarea id="edText" placeholder="记录今天的日常、心情、孩子们的趣事……"></textarea>
+    <div class="imgstrip" id="edImgs"></div>
+  </div>
+</div>
+
+<div id="lightbox" onclick="lbClick(event)"></div>
+
+<div id="sheet"></div>
+<div id="toast"></div>
+
+<input type="file" id="fileInput" accept="image/*" multiple hidden>
+
+<script>window.__MYDAY_EXPORT_DATA__=null;/*DATA*/</script>
+
+<script>
+'use strict';
+var IS_APP = !!(window.Android && typeof window.Android.getAllEntries === 'function');
+var EMBEDDED = (typeof window.__MYDAY_EXPORT_DATA__ !== 'undefined' && window.__MYDAY_EXPORT_DATA__) || null;
+
+function el(id){ return document.getElementById(id); }
+
+var entries = [];
+var view = 'timeline';
+var theme = 'light';
+var editingImages = [];
+var pendingImages = [];
+var editorDirty = false;
+var lbLast = 0;
+
+function pad(n){ return n < 10 ? '0' + n : '' + n; }
+function pad2(n){ return n < 10 ? '0' + n : '' + n; }
+function todayStr(){ var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function parseDate(s){ var p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+function weekdayCn(d){ return ['周日','周一','周二','周三','周四','周五','周六'][d.getDay()]; }
+function formatDayLabel(s){
+  var now = new Date();
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var d = parseDate(s);
+  var diff = Math.round((today - d) / 86400000);
+  if (diff === 0) return '今天';
+  if (diff === 1) return '昨天';
+  if (diff === 2) return '前天';
+  return (d.getMonth() + 1) + '月' + d.getDate() + '日';
+}
+function escapeHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function imgSrc(name){ return IS_APP ? ('img://' + name) : ('images/' + name); }
+function summaryLines(text){
+  var lines = String(text).split('\n').map(function(l){ return l.trim(); }).filter(Boolean).slice(0, 2);
+  var s = lines.join(' ');
+  return s.length > 80 ? s.slice(0, 80) + '…' : s;
+}
+function fmtBytes(b){
+  if (!b) return '0 KB';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1048576).toFixed(1) + ' MB';
+}
+
+function loadEntries(){
+  var list = [];
+  if (IS_APP) {
+    try { list = JSON.parse(window.Android.getAllEntries()) || []; } catch(e) { list = []; }
+  } else if (EMBEDDED) {
+    list = EMBEDDED.slice();
+  }
+  entries = list.map(function(e){
+    return { date: e.date || '', text: e.text || '', images: (e.images || []).slice() };
+  }).filter(function(e){ return /^\d{4}-\d{2}-\d{2}$/.test(e.date); });
+  entries.sort(function(a, b){ return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+}
+
+function emptyHtml(){
+  return '<div class="empty"><div class="big">🌤</div><div>还没有日记</div>' +
+    (IS_APP ? '<div class="sub">点击右上角 ＋ 开始记录今天</div>' : '<div class="sub">这是 MyDay 的网页导出，仅供浏览</div>') + '</div>';
+}
+
+function dayHtml(e){
+  var textHtml = escapeHtml(e.text).replace(/\n/g, '<br>');
+  var imgs = '';
+  for (var i = 0; i < e.images.length; i++) {
+    imgs += '<img class="timg" src="' + imgSrc(e.images[i]) + '" alt="" loading="lazy" onclick="openLightbox(\'' + e.images[i] + '\')">';
+  }
+  return '<article class="day" data-date="' + e.date + '">' +
+    '<div class="dayhead">' +
+      '<span class="dlabel">' + formatDayLabel(e.date) + '</span>' +
+      '<span class="dsub">' + e.date + ' · ' + weekdayCn(parseDate(e.date)) + '</span>' +
+      '<span class="spacer"></span>' +
+      '<button class="icobtn needapp" onclick="openEditor(\'' + e.date + '\')" title="编辑">✎</button>' +
+      '<button class="icobtn needapp" onclick="deleteEntry(\'' + e.date + '\')" title="删除">🗑</button>' +
+    '</div>' +
+    (e.text ? '<div class="dtext">' + textHtml + '</div>' : '') +
+    (imgs ? '<div class="dimgs">' + imgs + '</div>' : '') +
+  '</article>';
+}
+
+function renderTimeline(){
+  var main = el('list');
+  if (!entries.length) { main.innerHTML = emptyHtml(); return; }
+  var html = '';
+  for (var i = 0; i < entries.length; i++) html += dayHtml(entries[i]);
+  main.innerHTML = html;
+}
+
+function renderCatalog(){
+  var main = el('list');
+  if (!entries.length) { main.innerHTML = emptyHtml(); return; }
+  var html = '<div class="grid">';
+  for (var i = 0; i < entries.length; i++) {
+    var e = entries[i];
+    var first = e.images[0];
+    html += '<div class="card" onclick="openEditor(\'' + e.date + '\')">' +
+      '<button class="del needapp" onclick="event.stopPropagation();deleteEntry(\'' + e.date + '\')">✕</button>' +
+      (first ? '<div class="cardimg"><img src="' + imgSrc(first) + '" alt="" loading="lazy"></div>'
+             : '<div class="cardimg cardph"><span>' + formatDayLabel(e.date) + '</span></div>') +
+      '<div class="cardbody">' +
+        '<div class="carddate">' + formatDayLabel(e.date) + ' · ' + weekdayCn(parseDate(e.date)) + '</div>' +
+        '<div class="cardtext">' + (e.text ? escapeHtml(summaryLines(e.text)) : '（无文字）') + '</div>' +
+      '</div></div>';
+  }
+  html += '</div>';
+  main.innerHTML = html;
+}
+
+function render(){ if (view === 'catalog') renderCatalog(); else renderTimeline(); }
+
+function updateFooter(){
+  var n = entries.length, imgs = 0, i;
+  for (i = 0; i < entries.length; i++) imgs += entries[i].images.length;
+  var bytesTxt = '';
+  if (IS_APP) {
+    try { var s = JSON.parse(window.Android.getStats()); bytesTxt = ' · ' + fmtBytes(s.bytes); } catch(e) {}
+  }
+  el('footer').textContent = '共 ' + n + ' 篇 · ' + imgs + ' 张图片' + bytesTxt;
+}
+
+function updateToggleBtn(){
+  var b = el('btnToggle');
+  if (view === 'catalog') { b.textContent = '≡'; b.title = '切换为流水视图'; }
+  else { b.textContent = '▦'; b.title = '切换为目录视图'; }
+}
+
+function toggleView(){
+  view = (view === 'timeline') ? 'catalog' : 'timeline';
+  try { localStorage.setItem('myday-view', view); } catch(e) {}
+  updateToggleBtn();
+  render();
+}
+
+function toggleTheme(){
+  theme = (theme === 'dark') ? 'light' : 'dark';
+  applyTheme(theme);
+}
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem('myday-theme', t); } catch(e) {}
+  if (IS_APP) window.Android.setTheme(t === 'dark');
+}
+function initTheme(){
+  var t = 'light';
+  try { t = localStorage.getItem('myday-theme') || 'light'; } catch(e) {}
+  theme = t;
+  applyTheme(t);
+}
+
+function openEditor(date){
+  if (!IS_APP) return;
+  var d = date || todayStr();
+  var ex = entries.find(function(x){ return x.date === d; });
+  editingImages = ex ? (ex.images || []).slice() : [];
+  pendingImages = [];
+  el('edDate').value = d;
+  el('edText').value = ex ? ex.text : '';
+  editorDirty = false;
+  renderEditorImages();
+  el('editor').classList.add('open');
+  setTimeout(function(){ el('edText').focus(); }, 120);
+}
+function closeEditor(){
+  if (editorDirty && !confirm('有未保存的修改，确定放弃？')) return false;
+  el('editor').classList.remove('open');
+  editorDirty = false;
+  pendingImages = [];
+  return true;
+}
+function renderEditorImages(){
+  var wrap = el('edImgs');
+  var html = '';
+  for (var i = 0; i < editingImages.length; i++) {
+    var n = editingImages[i];
+    html += '<span class="ethumb"><img src="' + imgSrc(n) + '" alt=""><i onclick="removeEditImg(\'' + n + '\')">✕</i></span>';
+  }
+  for (var j = 0; j < pendingImages.length; j++) {
+    html += '<span class="ethumb"><img src="' + pendingImages[j].dataUrl + '" alt=""><i onclick="removePendingImg(' + j + ')">✕</i></span>';
+  }
+  html += '<button class="addimg" onclick="pickImages()">＋ 图片</button>';
+  wrap.innerHTML = html;
+}
+function removeEditImg(name){
+  editingImages = editingImages.filter(function(n){ return n !== name; });
+  editorDirty = true;
+  renderEditorImages();
+}
+function removePendingImg(i){
+  pendingImages.splice(i, 1);
+  editorDirty = true;
+  renderEditorImages();
+}
+function pickImages(){
+  if (!IS_APP) return;
+  el('fileInput').click();
+}
+function onPickFiles(files){
+  var list = Array.prototype.slice.call(files || []);
+  if (!list.length) return;
+  var i = 0;
+  function next(){
+    if (i >= list.length) return;
+    var f = list[i]; i++;
+    compressImage(f).then(function(dataUrl){
+      pendingImages.push({ dataUrl: dataUrl });
+      editorDirty = true;
+      renderEditorImages();
+      next();
+    }).catch(function(){
+      toast('无法处理图片：' + f.name);
+      next();
+    });
+  }
+  next();
+}
+function compressImage(file){
+  return new Promise(function(resolve, reject){
+    var reader = new FileReader();
+    reader.onerror = function(){ reject(new Error('read')); };
+    reader.onload = function(){
+      var img = new Image();
+      img.onerror = function(){ reject(new Error('decode')); };
+      img.onload = function(){
+        try {
+          var MAX = 1600;
+          var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+          var scale = Math.min(1, MAX / Math.max(w, h));
+          var nw = Math.max(1, Math.round(w * scale));
+          var nh = Math.max(1, Math.round(h * scale));
+          var c = document.createElement('canvas');
+          c.width = nw; c.height = nh;
+          var ctx = c.getContext('2d');
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, nw, nh);
+          ctx.drawImage(img, 0, 0, nw, nh);
+          var dataUrl = c.toDataURL('image/jpeg', 0.82);
+          c.width = 0; c.height = 0;
+          resolve(dataUrl);
+        } catch (e) { reject(e); }
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function nextNum(d, names){
+  var max = 0;
+  names.forEach(function(n){
+    var m = /^(\d{4}-\d{2}-\d{2})_(\d+)\.jpg$/.exec(n);
+    if (m) max = Math.max(max, parseInt(m[2], 10));
+  });
+  return max;
+}
+function saveEntry(){
+  if (!IS_APP) return;
+  var d = el('edDate').value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { toast('日期格式错误'); return; }
+  var originalImages = editingImages.slice();
+  var names = editingImages.slice();
+  var idx = nextNum(d, names) + 1;
+  for (var i = 0; i < pendingImages.length; i++) {
+    var name = d + '_' + pad2(idx++) + '.jpg';
+    var b64 = pendingImages[i].dataUrl.split(',')[1] || '';
+    if (b64) { try { window.Android.saveImage(name, b64); } catch(e) {} }
+    names.push(name);
+  }
+  pendingImages = [];
+  var removed = originalImages.filter(function(n){ return names.indexOf(n) < 0; });
+  removed.forEach(function(n){ try { window.Android.deleteImage(n); } catch(e) {} });
+  var json = JSON.stringify({ date: d, text: el('edText').value, images: names });
+  var ok = false;
+  try { ok = window.Android.saveEntry(d, json); } catch(e) {}
+  editingImages = names;
+  editorDirty = false;
+  if (ok) { toast('已保存'); closeEditor(); reload(); }
+  else toast('保存失败');
+}
+function deleteEntry(d){
+  if (!confirm('确定删除 ' + d + ' 的日记？其中图片也会一并删除。')) return;
+  try { window.Android.deleteEntry(d); } catch(e) {}
+  toast('已删除');
+  reload();
+}
+
+function openLightbox(name){
+  var lb = el('lightbox');
+  lb.innerHTML = '<img src="' + imgSrc(name) + '">';
+  lb.classList.add('open');
+}
+function closeLightbox(){
+  var lb = el('lightbox');
+  lb.classList.remove('open');
+  lb.innerHTML = '';
+}
+function lbClick(ev){
+  var now = Date.now();
+  if (now - lbLast < 320) {
+    lbLast = 0;
+    var img = el('lightbox').querySelector('img');
+    if (img) img.classList.toggle('zoomed');
+  } else {
+    lbLast = now;
+    setTimeout(function(){
+      if (lbLast && Date.now() - lbLast >= 340) { closeLightbox(); lbLast = 0; }
+    }, 340);
+  }
+}
+
+function showSheet(items){
+  var s = el('sheet');
+  var html = '<div class="sheetwrap">';
+  for (var i = 0; i < items.length; i++) {
+    html += '<button class="sheetbtn' + (items[i].danger ? ' danger' : '') + '" onclick="sheetPick(' + i + ')">' +
+      '<span>' + escapeHtml(items[i].label) + '</span>' +
+      (items[i].sub ? '<small>' + escapeHtml(items[i].sub) + '</small>' : '') +
+      '</button>';
+  }
+  html += '</div>';
+  s.innerHTML = html;
+  window.__sheetItems = items;
+  s.classList.add('open');
+}
+function sheetPick(i){
+  var items = window.__sheetItems;
+  closeSheet();
+  if (items && items[i] && items[i].fn) items[i].fn();
+}
+function closeSheet(){
+  var s = el('sheet');
+  s.classList.remove('open');
+  window.__sheetItems = null;
+}
+function sheetBlank(ev){
+  if (ev.target === el('sheet')) closeSheet();
+}
+
+function exportMenu(){
+  showSheet([
+    { label: '备份（.zip）', sub: '完整无损备份，解压后浏览器打开 index.html 即可浏览', fn: function(){ if (IS_APP) window.Android.exportZip(); } },
+    { label: '网页文件夹', sub: '把可浏览的网站直接导出到所选文件夹', fn: function(){ if (IS_APP) window.Android.exportFolder(); } },
+    { label: '分享备份', sub: '把备份压缩包分享出去', fn: function(){ if (IS_APP) window.Android.shareZip(); } }
+  ]);
+}
+function importMenu(){
+  if (!confirm('导入将合并数据，同日期日记会被覆盖。\n请选择之前导出的 .zip 备份。')) return;
+  window.Android.importData();
+}
+function menuMenu(){
+  var stats = { entries: entries.length, images: 0, bytes: 0 };
+  if (IS_APP) {
+    try { stats = JSON.parse(window.Android.getStats() || '{"entries":0,"images":0,"bytes":0}'); } catch(e) {}
+  } else {
+    for (var i = 0; i < entries.length; i++) stats.images += entries[i].images.length;
+  }
+  showSheet([
+    { label: '统计信息', sub: stats.entries + ' 篇日记 · ' + stats.images + ' 张图片 · ' + fmtBytes(stats.bytes), fn: function(){} },
+    { label: (theme === 'dark') ? '切换为浅色主题' : '切换为深色主题', fn: toggleTheme },
+    { label: '分享备份', sub: '把备份压缩包分享出去', fn: function(){ if (IS_APP) window.Android.shareZip(); } },
+    { label: '清空所有日记', sub: '删除全部内容，不可恢复', danger: true, fn: function(){
+        if (IS_APP && confirm('确定清空所有数据？此操作不可恢复！')) { try { window.Android.clearAll(); } catch(e) {} toast('已清空'); reload(); }
+      } }
+  ]);
+}
+
+function reload(){ loadEntries(); render(); updateFooter(); }
+
+function toast(msg){
+  var t = el('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(function(){ t.classList.remove('show'); }, 2200);
+}
+
+window.__handleBack = function(){
+  if (el('lightbox').classList.contains('open')) { closeLightbox(); return true; }
+  if (el('sheet').classList.contains('open')) { closeSheet(); return true; }
+  if (el('editor').classList.contains('open')) return closeEditor();
+  return false;
+};
+window.__onExportResult = function(ok){ toast(ok ? '导出完成' : '导出失败'); };
+window.__onImportResult = function(ok, count){
+  if (ok) { reload(); toast('导入完成，共 ' + count + ' 篇'); }
+  else toast('导入失败');
+};
+
+el('fileInput').addEventListener('change', function(ev){
+  onPickFiles(ev.target.files);
+  ev.target.value = '';
+});
+el('edText').addEventListener('input', function(){ editorDirty = true; });
+el('edDate').addEventListener('change', function(){
+  var d = el('edDate').value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+  var ex = entries.find(function(x){ return x.date === d; });
+  editingImages = ex ? (ex.images || []).slice() : [];
+  pendingImages = [];
+  el('edText').value = ex ? ex.text : '';
+  renderEditorImages();
+  editorDirty = true;
+});
+el('sheet').addEventListener('click', sheetBlank);
+
+initTheme();
+var savedView = null;
+try { savedView = localStorage.getItem('myday-view'); } catch(e) {}
+if (savedView === 'catalog' || savedView === 'timeline') view = savedView;
+if (!IS_APP) document.body.classList.add('browser');
+updateToggleBtn();
+loadEntries();
+render();
+updateFooter();
+</script>
+</body>
+</html>
