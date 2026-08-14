@@ -66,14 +66,17 @@ main{max-width:700px;margin:0 auto;padding:8px 14px 110px}
 .entry{margin:0 0 14px}
 .entrymeta{display:flex;align-items:center;gap:6px;margin-bottom:4px}
 .entrymeta .icobtn{font-size:14px;width:28px;height:28px;min-width:28px}
-.grpsum{display:flex;align-items:center;gap:10px;padding:9px 14px 10px;color:var(--muted);font-size:13.5px;line-height:1.5;border-bottom:1px solid var(--line);cursor:pointer}
-.grpsum:active{background:var(--accent-soft)}
-.gpsumimg{width:52px;height:52px;border-radius:10px;object-fit:cover;flex:0 0 auto;background:var(--accent-soft)}
-.grpsum span{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all}
+.dcell2{background:var(--bg-soft);border-radius:14px;padding:12px;cursor:pointer;margin:0 0 10px}
+.dcell2:active{background:var(--accent-soft)}
+.dhead2{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.dsub2{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.dstrip{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.dstrip img{width:64px;height:64px;object-fit:cover;border-radius:8px;flex:0 0 auto;display:block;background:var(--accent-soft);cursor:pointer}
+.dlines{display:flex;flex-direction:column;gap:2px;margin-top:8px}
+.dline{font-size:14px;line-height:1.7;color:var(--ink);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-all;cursor:pointer}
+.dline:active{color:var(--muted)}
 .row{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);cursor:pointer}
 .row:active{background:var(--accent-soft)}
-.rowthumb{flex:0 0 auto}
-.rowthumb img{width:52px;height:52px;border-radius:10px;object-fit:cover;display:block;background:var(--accent-soft)}
 .rowtxt{flex:1;font-size:14px;color:var(--ink);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all;min-width:0}
 .dayadd{width:100%;margin-top:8px;padding:10px;border:1.5px dashed var(--line);border-radius:12px;background:transparent;color:var(--muted);font-size:14px;cursor:pointer}
 .dayadd:active{background:var(--accent-soft)}
@@ -249,8 +252,9 @@ function thumbImgTag(name, cls, onclick){
   var oc = onclick ? ' onclick="' + onclick + '"' : '';
   return '<img class="' + cls + '" src="' + thumbSrc(name) + '" alt="" loading="lazy"' + fb + oc + '>';
 }
-function summaryLines(text){
-  var lines = String(text).split('\n').map(function(l){ return l.trim(); }).filter(Boolean).slice(0, 2);
+function summaryLines(text, maxLines){
+  var n = (typeof maxLines === 'number' && maxLines > 0) ? maxLines : 2;
+  var lines = String(text).split('\n').map(function(l){ return l.trim(); }).filter(Boolean).slice(0, n);
   var s = lines.join(' ');
   return s.length > 80 ? s.slice(0, 80) + '…' : s;
 }
@@ -370,18 +374,8 @@ function returnToOrigin(){
   }
 }
 
-function dayThumbsHtml(g){
-  var thumbs = '';
-  for (var i = 0; i < g.imgs.length; i++) {
-    thumbs += '<span class="gthumb">' + thumbImgTag(g.imgs[i], '', '') + '</span>';
-  }
-  return thumbs ? '<span class="gthumbs">' + thumbs + '</span>' : '';
-}
 function dayEntryRowHtml(en){
-  var thumb = '';
-  if (en.images.length) thumb = '<span class="rowthumb">' + thumbImgTag(en.images[0], 'rowthumb', '') + '</span>';
   return '<div class="row" onclick="openViewer(\'' + en.id + '\')">' +
-    thumb +
     '<span class="rowtxt">' + (en.text ? escapeHtml(summaryLines(en.text)) : '（无文字）') + '</span>' +
     '<button class="icobtn needapp" onclick="event.stopPropagation();openEditorById(\'' + en.id + '\')" title="编辑">✎</button>' +
     '<button class="icobtn needapp" onclick="event.stopPropagation();deleteEntryById(\'' + en.id + '\')" title="删除">🗑</button>' +
@@ -390,21 +384,34 @@ function dayEntryRowHtml(en){
 function daySectionHtml(g){
   var key = 'd_' + g.date;
   var open = expanded.has(key);
-  var first = g.list[0];
+  var thumbs = '';
+  var texts = '';
+  var i, j;
+  for (i = 0; i < g.list.length; i++) {
+    var en = g.list[i];
+    for (j = 0; j < en.images.length; j++) {
+      thumbs += thumbImgTag(en.images[j], 'dstripimg', 'openViewer(\'' + en.id + '\')');
+    }
+    if (en.text) {
+      texts += '<div class="dline" onclick="openViewer(\'' + en.id + '\')">' + escapeHtml(summaryLines(en.text, 5)) + '</div>';
+    }
+  }
   var html = '<section class="grp">' +
-    '<button class="grphead" onclick="toggleKey(\'' + key + '\')">' +
-      dayThumbsHtml(g) +
-      '<span class="gtitle">' + formatDayLabel(g.date) + '</span>' +
-      '<span class="gsub">' + g.list.length + ' 篇 · ' + weekdayCn(parseDate(g.date)) + '</span>' +
-      '<span class="gchev">' + (open ? '▾' : '▸') + '</span>' +
-    '</button>' +
-    '<div class="grpsum" onclick="openViewer(\'' + first.id + '\')">' +
-      (first.images[0] ? thumbImgTag(first.images[0], 'gpsumimg', '') : '') +
-      '<span>' + (first.text ? escapeHtml(summaryLines(first.text)) : '（无文字）') + '</span>' +
+    '<div class="dcell2" onclick="toggleKey(\'' + key + '\')">' +
+      '<div class="dhead2">' +
+        '<span class="dlabel">' + formatDayLabel(g.date) + '</span>' +
+        '<span class="dsub2">' + g.date + ' · ' + weekdayCn(parseDate(g.date)) + ' · ' + g.list.length + ' 篇</span>' +
+        '<span class="spacer"></span>' +
+        '<button class="icobtn needapp" onclick="event.stopPropagation();newEntryForDate(\'' + g.date + '\')" title="再加一条">＋</button>' +
+        '<button class="icobtn needapp" onclick="event.stopPropagation();deleteDay(\'' + g.date + '\')" title="删除这一天">🗑</button>' +
+        '<span class="gchev">' + (open ? '▾' : '▸') + '</span>' +
+      '</div>' +
+      (thumbs ? '<div class="dstrip">' + thumbs + '</div>' : '') +
+      (texts ? '<div class="dlines">' + texts + '</div>' : '') +
     '</div>';
   if (open) {
     html += '<div class="grpbody">';
-    for (var j = 0; j < g.list.length; j++) html += dayEntryRowHtml(g.list[j]);
+    for (var k = 0; k < g.list.length; k++) html += dayEntryRowHtml(g.list[k]);
     html += '<button class="dayadd needapp" onclick="newEntryForDate(\'' + g.date + '\')">＋ 给这一天加一条</button>';
     html += '</div>';
   }
