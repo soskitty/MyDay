@@ -99,6 +99,12 @@ main{max-width:700px;margin:0 auto;padding:8px 14px 110px}
 .filterbar{display:flex;align-items:center;gap:8px;background:var(--accent-soft);border-radius:10px;padding:8px 14px;margin-bottom:10px;color:var(--accent);font-weight:600;font-size:13.5px}
 .filterx{border:none;background:transparent;color:inherit;font-size:14px;cursor:pointer;padding:0;margin-left:auto}
 .filterx:active{opacity:.6}
+.pager{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;padding:14px 0 16px}
+.pbtn{border:none;background:var(--bg-soft);color:var(--ink);font-size:14px;padding:8px 14px;border-radius:10px;cursor:pointer}
+.pbtn:disabled{opacity:.35;cursor:default}
+.pnum{border:none;background:transparent;color:var(--ink);font-size:14px;min-width:36px;height:36px;border-radius:10px;cursor:pointer;padding:0}
+.pnum.on{background:var(--accent);color:#fff;font-weight:700}
+.pdot{color:var(--muted);padding:0 2px}
 .card{background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);cursor:pointer;position:relative;transition:transform .1s}
 .card:active{transform:scale(.97)}
 .cardimg{height:120px;overflow:hidden;background:var(--accent-soft)}
@@ -217,6 +223,8 @@ var view = 'timeline';
 var monthFilter = '';
 var originView = null;
 var originScroll = 0;
+var tlPage = 1;
+var tlPageSize = 20;
 var expanded = new Set();
 var theme = 'light';
 var editingId = null;
@@ -284,6 +292,7 @@ function normalizeEntry(raw){
   return e;
 }
 function loadEntries(){
+  tlPage = 1;
   var list = [];
   if (IS_APP) {
     try { list = JSON.parse(window.Android.getAllEntries()) || []; } catch(e) { list = []; }
@@ -345,19 +354,56 @@ function renderTimeline(){
   var filtered = entries;
   if (monthFilter) filtered = entries.filter(function(e){ return e.date.indexOf(monthFilter) === 0; });
   if (!filtered.length && !entries.length) { main.innerHTML = emptyHtml(); return; }
+  var days = groupEntries(filtered);
+  var total = Math.max(1, Math.ceil(days.length / tlPageSize));
+  if (tlPage > total) tlPage = total;
+  if (tlPage < 1) tlPage = 1;
+  var start = (tlPage - 1) * tlPageSize;
+  var pageDays = days.slice(start, start + tlPageSize);
   var html = '';
   if (monthFilter || originView) {
     html += '<div class="filterbar"><span>' + (monthFilter ? monthLabel(monthFilter) + ' 流水' : '流水视图') + '</span>' +
       '<button class="filterx" onclick="returnToOrigin()" title="返回原视图">✕ 返回</button></div>';
   }
-  if (filtered.length) html += streamHtml(groupEntries(filtered));
+  html += pagerHtml(total);
+  if (pageDays.length) html += streamHtml(pageDays);
+  html += pagerHtml(total);
   main.innerHTML = html;
+}
+function pagerHtml(total){
+  if (total <= 1) return '';
+  var html = '<div class="pager">' +
+    '<button class="pbtn" onclick="goPage(' + (tlPage - 1) + ')"' + (tlPage <= 1 ? ' disabled' : '') + '>上一页</button>';
+  var nums = pageNums(total);
+  for (var i = 0; i < nums.length; i++) {
+    if (nums[i] === 0) html += '<span class="pdot">…</span>';
+    else if (nums[i] === tlPage) html += '<span class="pnum on">' + nums[i] + '</span>';
+    else html += '<button class="pnum" onclick="goPage(' + nums[i] + ')">' + nums[i] + '</button>';
+  }
+  html += '<button class="pbtn" onclick="goPage(' + (tlPage + 1) + ')"' + (tlPage >= total ? ' disabled' : '') + '>下一页</button></div>';
+  return html;
+}
+function pageNums(total){
+  var out = [1];
+  if (tlPage - 1 > 2) out.push(0);
+  for (var i = Math.max(2, tlPage - 1); i <= Math.min(total - 1, tlPage + 1); i++) out.push(i);
+  if (tlPage + 1 < total - 1) out.push(0);
+  if (total > 1) out.push(total);
+  var res = [];
+  for (var j = 0; j < out.length; j++) if (res[res.length - 1] !== out[j]) res.push(out[j]);
+  return res;
+}
+function goPage(p){
+  tlPage = p;
+  render();
+  try { window.scrollTo(0, 0); } catch(e) {}
 }
 function curScroll(){
   try { return (typeof window.scrollY === 'number') ? window.scrollY : 0; } catch(e) { return 0; }
 }
 function setMonthFilter(key){
   monthFilter = key;
+  tlPage = 1;
   originView = view;
   originScroll = curScroll();
   setView('timeline');
