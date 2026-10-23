@@ -125,7 +125,8 @@ main{max-width:700px;margin:0 auto;padding:8px 14px 110px}
   font-size:17px;line-height:1.8;resize:none;outline:none;min-height:150px}
 .imgstrip{display:flex;gap:8px;overflow-x:auto;padding:0 12px 12px;scrollbar-width:none}
 .imgstrip::-webkit-scrollbar{display:none}
-.ethumb{position:relative;flex:0 0 88px;height:88px;border-radius:10px;overflow:hidden;background:var(--accent-soft)}
+.ethumb{position:relative;flex:0 0 88px;height:88px;border-radius:10px;overflow:hidden;background:var(--accent-soft);transition:transform .15s ease}
+.ethumb.dragging{transition:none;z-index:6;transform-origin:center;box-shadow:0 8px 20px rgba(0,0,0,.4);outline:2px solid var(--accent)}
 .ethumb img{width:100%;height:100%;object-fit:cover}
 .ethumb i{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-style:normal;font-size:11px;display:flex;align-items:center;justify-content:center}
 .addimg{flex:0 0 88px;height:88px;border:2px dashed var(--line);border-radius:10px;background:transparent;color:var(--muted);font-size:14px;display:flex;align-items:center;justify-content:center;cursor:pointer}
@@ -228,8 +229,7 @@ var tlPageSize = 20;
 var expanded = new Set();
 var theme = 'light';
 var editingId = null;
-var editingImages = [];
-var pendingImages = [];
+var editImgs = [];
 var editorDirty = false;
 var dateAutoSet = false;
 var autoDateDone = false;
@@ -318,7 +318,7 @@ function entryBlockHtml(en){
   var textHtml = escapeHtml(en.text).replace(/\n/g, '<br>');
   var imgs = '';
   for (var i = 0; i < en.images.length; i++) {
-    imgs += thumbImgTag(en.images[i], 'timg', 'openLightbox(\'' + en.images[i] + '\')');
+    imgs += '<img class="timg" src="' + imgSrc(en.images[i]) + '" alt="" loading="lazy" onclick="openLightbox(\'' + en.images[i] + '\')">';
   }
   return '<div class="entry" data-id="' + en.id + '">' +
     '<div class="entrymeta">' +
@@ -701,8 +701,7 @@ function openEditorById(id){
   if (!en) return;
   editingId = en.id;
   dateAutoSet = true;
-  editingImages = (en.images || []).slice();
-  pendingImages = [];
+  editImgs = (en.images || []).map(function(n){ return { name: n }; });
   el('edDate').value = en.date;
   el('edText').value = en.text;
   editorDirty = false;
@@ -715,8 +714,7 @@ function openNewEntry(date){
   editingId = null;
   dateAutoSet = false;
   autoDateDone = false;
-  editingImages = [];
-  pendingImages = [];
+  editImgs = [];
   el('edDate').value = date || todayStr();
   el('edText').value = '';
   editorDirty = false;
@@ -733,7 +731,7 @@ function __openFromShare(jsonStr){
   openNewEntry(data.date);
   var imgs = data.images || [];
   imgs.forEach(function(d){
-    pendingImages.push({ dataUrl: d });
+    editImgs.push({ dataUrl: d });
   });
   editorDirty = true;
   renderEditorImages();
@@ -758,30 +756,135 @@ function closeEditor(){
   if (editorDirty && !confirm('有未保存的修改，确定放弃？')) return false;
   el('editor').classList.remove('open');
   editorDirty = false;
-  pendingImages = [];
+  editImgs = [];
   return true;
 }
 function renderEditorImages(){
   var wrap = el('edImgs');
   var html = '';
-  for (var i = 0; i < editingImages.length; i++) {
-    var n = editingImages[i];
-    html += '<span class="ethumb"><img src="' + imgSrc(n) + '" alt=""><i onclick="removeEditImg(\'' + n + '\')">✕</i></span>';
-  }
-  for (var j = 0; j < pendingImages.length; j++) {
-    html += '<span class="ethumb"><img src="' + pendingImages[j].dataUrl + '" alt=""><i onclick="removePendingImg(' + j + ')">✕</i></span>';
+  for (var i = 0; i < editImgs.length; i++) {
+    var it = editImgs[i];
+    var src = it.name ? imgSrc(it.name) : it.dataUrl;
+    html += '<span class="ethumb" data-i="' + i + '"><img src="' + src + '" alt=""><i onclick="removeEditImg(' + i + ')">✕</i></span>';
   }
   html += '<button class="addimg" onclick="pickImages()">＋ 图片</button>';
   wrap.innerHTML = html;
 }
-function removeEditImg(name){
-  editingImages = editingImages.filter(function(n){ return n !== name; });
+function removeEditImg(i){
+  i = parseInt(i, 10);
+  if (isNaN(i) || i < 0 || i >= editImgs.length) return;
+  editImgs.splice(i, 1);
   editorDirty = true;
   renderEditorImages();
 }
-function removePendingImg(i){
-  pendingImages.splice(i, 1);
+function moveEditImg(from, to){
+  from = parseInt(from, 10);
+  to = parseInt(to, 10);
+  if (isNaN(from) || isNaN(to)) return;
+  if (from === to) return;
+  if (from < 0 || from >= editImgs.length || to < 0 || to >= editImgs.length) return;
+  var it = editImgs.splice(from, 1)[0];
+  editImgs.splice(to, 0, it);
   editorDirty = true;
+  renderEditorImages();
+}
+var imgDrag = null;
+var imgDragEndedAt = 0;
+function imgDragTarget(e){
+  var t = e.target;
+  if (!t || typeof t.closest !== 'function') return null;
+  if (t.tagName === 'I' || t.tagName === 'BUTTON') return null;
+  return t.closest('.ethumb');
+}
+function onImgDown(e){
+  if (e.type === 'mousedown') {
+    if (imgDrag) return;
+    if (imgDragEndedAt && Date.now() - imgDragEndedAt < 400) return;
+  }
+  var thumb = imgDragTarget(e);
+  if (!thumb) return;
+  if (e.type === 'mousedown' && e.preventDefault) e.preventDefault();
+  var idx = parseInt(thumb.getAttribute('data-i'), 10);
+  if (isNaN(idx)) return;
+  var pt = e.touches ? e.touches[0] : e;
+  imgDrag = { el: thumb, from: idx, x0: pt.clientX, y0: pt.clientY, to: idx, active: false, timer: null };
+  if (e.type === 'touchstart') {
+    imgDrag.timer = setTimeout(function(){
+      if (!imgDrag) return;
+      imgDrag.active = true;
+      imgDrag.el.classList.add('dragging');
+      try { if (navigator.vibrate) navigator.vibrate(12); } catch(err) {}
+    }, 350);
+  }
+}
+function onImgMove(e){
+  if (!imgDrag) return;
+  var pt = e.touches ? e.touches[0] : e;
+  var dx = pt.clientX - imgDrag.x0, dy = pt.clientY - imgDrag.y0;
+  if (!imgDrag.active) {
+    if (imgDrag.timer) {
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+        clearTimeout(imgDrag.timer);
+        imgDrag.timer = null;
+        imgDrag = null;
+      }
+      return;
+    }
+    if (Math.abs(dx) > 6 && Math.abs(dx) >= Math.abs(dy)) {
+      imgDrag.active = true;
+      imgDrag.el.classList.add('dragging');
+    } else {
+      if (Math.abs(dy) > 6) imgDrag = null;
+      return;
+    }
+  }
+  if (e.preventDefault) e.preventDefault();
+  var wrap = imgDrag.el.parentNode;
+  if (!wrap) return;
+  var kids = wrap.querySelectorAll('.ethumb');
+  var W = imgDrag.el.offsetWidth;
+  var gap = 8;
+  for (var g = 1; g < kids.length; g++) {
+    var gg = kids[g].offsetLeft - kids[g - 1].offsetLeft - kids[g - 1].offsetWidth;
+    if (gg > 0) { gap = gg; break; }
+  }
+  imgDrag.el.style.transform = 'translateX(' + dx + 'px) scale(1.05)';
+  var center0 = imgDrag.el.offsetLeft + W / 2 + dx;
+  var to = 0;
+  for (var i = 0; i < kids.length; i++) {
+    if (kids[i] === imgDrag.el) continue;
+    if (center0 > kids[i].offsetLeft + kids[i].offsetWidth / 2) to++;
+  }
+  imgDrag.to = to;
+  var step = W + gap;
+  for (var k = 0; k < kids.length; k++) {
+    if (kids[k] === imgDrag.el) continue;
+    var shift = 0;
+    if (imgDrag.from < to && k > imgDrag.from && k <= to) shift = -step;
+    else if (imgDrag.from > to && k >= to && k < imgDrag.from) shift = step;
+    if (shift) kids[k].style.transform = 'translateX(' + shift + 'px)';
+    else if (kids[k].style.transform) kids[k].style.transform = '';
+  }
+}
+function onImgUp(){
+  if (!imgDrag) return;
+  var st = imgDrag;
+  imgDrag = null;
+  if (st.timer) { clearTimeout(st.timer); st.timer = null; }
+  if (st.active) {
+    imgDragEndedAt = Date.now();
+    st.el.classList.remove('dragging');
+    if (st.to !== st.from) moveEditImg(st.from, st.to);
+    else renderEditorImages();
+  }
+}
+function onImgCancel(){
+  if (!imgDrag) return;
+  var st = imgDrag;
+  imgDrag = null;
+  if (st.timer) clearTimeout(st.timer);
+  if (st.active) imgDragEndedAt = Date.now();
+  st.el.classList.remove('dragging');
   renderEditorImages();
 }
 function pickImages(){
@@ -806,7 +909,7 @@ function onPickFiles(files){
           toast('图片没有日期信息，日期保持原样');
         }
       }
-      pendingImages.push({ dataUrl: res.dataUrl, thumbUrl: res.thumbUrl });
+      editImgs.push({ dataUrl: res.dataUrl, thumbUrl: res.thumbUrl });
       editorDirty = true;
       renderEditorImages();
       next();
@@ -989,14 +1092,17 @@ function saveEntry(){
     id = 'e' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
   }
   var time = '';
-  var originalImages = editingImages.slice();
-  var names = editingImages.slice();
-  var idx = nextNum(id, names) + 1;
-  for (var i = 0; i < pendingImages.length; i++) {
+  var originalImages = [];
+  for (var oi = 0; oi < editImgs.length; oi++) if (editImgs[oi].name) originalImages.push(editImgs[oi].name);
+  var names = [];
+  var idx = nextNum(id, originalImages) + 1;
+  for (var i = 0; i < editImgs.length; i++) {
+    var it = editImgs[i];
+    if (it.name) { names.push(it.name); continue; }
     var name = id + '_' + pad2(idx++) + '.jpg';
-    var b64 = pendingImages[i].dataUrl.split(',')[1] || '';
+    var b64 = (it.dataUrl || '').split(',')[1] || '';
     if (b64) { try { window.Android.saveImage(name, b64); } catch(e) {} }
-    var tb = pendingImages[i].thumbUrl || '';
+    var tb = it.thumbUrl || '';
     if (tb) {
       var tname = name.replace(/(\.\w{1,5})$/, '_t$1');
       var tb64 = tb.split(',')[1] || '';
@@ -1004,7 +1110,6 @@ function saveEntry(){
     }
     names.push(name);
   }
-  pendingImages = [];
   var removed = originalImages.filter(function(n){ return names.indexOf(n) < 0; });
   removed.forEach(function(n){
     try { window.Android.deleteImage(n); } catch(e) {}
@@ -1027,7 +1132,7 @@ function saveEntry(){
   var ok = false;
   try { ok = window.Android.saveEntry(id, json); } catch(e) {}
   editingId = id;
-  editingImages = names;
+  editImgs = names.map(function(n){ return { name: n }; });
   editorDirty = false;
   if (ok) {
     toast('已保存');
@@ -1293,6 +1398,22 @@ el('edDate').addEventListener('change', function(){
   applyEditorDate(el('edDate').value);
 });
 el('sheet').addEventListener('click', sheetBlank);
+
+(function bindImgDrag(){
+  var wrapEl = el('edImgs');
+  wrapEl.addEventListener('touchstart', onImgDown, { passive: true });
+  wrapEl.addEventListener('touchmove', onImgMove, { passive: false });
+  wrapEl.addEventListener('touchend', onImgUp);
+  wrapEl.addEventListener('touchcancel', onImgCancel);
+  wrapEl.addEventListener('mousedown', onImgDown);
+  wrapEl.addEventListener('click', function(e){
+    if (imgDragEndedAt && Date.now() - imgDragEndedAt < 400) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
+  if (document.addEventListener) {
+    document.addEventListener('mousemove', onImgMove);
+    document.addEventListener('mouseup', onImgUp);
+  }
+})();
 
 initTheme();
 var savedView = null;
